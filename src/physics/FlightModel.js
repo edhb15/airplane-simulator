@@ -252,7 +252,7 @@ export class FlightModel {
     this.ias = tasToIas(V, atm.rho);
 
     // Ground below CG
-    const g0 = this.groundFn(this.position.x, this.position.z);
+    const g0 = this.groundFn(this.position.x, this.position.z, this.position.y);
     this.groundHeight = g0.h;
     this.groundSurface = g0.surface;
     this.agl = this.position.y - g0.h + this.gearBottomY;
@@ -423,7 +423,7 @@ export class FlightModel {
       }
       _r.copy(g.body).applyQuaternion(this.quaternion);
       _p.copy(this.position).add(_r);
-      const gnd = this.groundFn(_p.x, _p.z);
+      const gnd = this.groundFn(_p.x, _p.z, _p.y);
       _n.set(gnd.nx, gnd.ny, gnd.nz);
       const depth = (gnd.h - _p.y) * gnd.ny;
       g.steerAngle = g.steer ? ctl.steer * maxSteer * steerFade : 0;
@@ -477,7 +477,7 @@ export class FlightModel {
     for (const ct of this.contacts) {
       _r.copy(ct.body).applyQuaternion(this.quaternion);
       _p.copy(this.position).add(_r);
-      const gnd = this.groundFn(_p.x, _p.z);
+      const gnd = this.groundFn(_p.x, _p.z, _p.y);
       const depth = (gnd.h - _p.y) * gnd.ny;
       if (depth <= 0) {
         ct.contact = false;
