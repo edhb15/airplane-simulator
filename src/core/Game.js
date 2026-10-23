@@ -62,6 +62,7 @@ export class Game {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = g.shadows !== 'off';
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.localClippingEnabled = true; // fighter cockpit tub cut-out
     this.renderer = renderer;
     this.basePixelRatio = Math.min(window.devicePixelRatio || 1, 2) * (g.resolutionScale || 1);
     this.pixelRatio = this.basePixelRatio;
@@ -200,7 +201,7 @@ export class Game {
     const L = layoutFor('AXMI');
     // Showcase stand: on the apron in front of the first hangar, nose pointing out
     const H = L.hangars[0];
-    const out = Math.sign(H.laneV - H.v) || 1;
+    const out = H.out;
     const fus = spec.model.fuselage;
     const off = H.d / 2 + 16 + (fus.tailZ - fus.noseZ) * 0.55;
     const pA = L.world(H.u, H.v + out * off),

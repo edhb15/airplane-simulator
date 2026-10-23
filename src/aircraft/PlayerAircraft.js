@@ -48,6 +48,35 @@ export class PlayerAircraft {
       this.visual.root.add(this.cabin.group);
     }
     this.effects = new AircraftEffects(game.scene, this);
+    // Exterior materials (excluding cockpit & cabin): from inside the camera needs the
+    // hull to shadow the interior, which requires front faces in the shadow pass
+    this.exteriorMats = new Set();
+    const skip = new Set([this.cockpit.group, this.cabin && this.cabin.group].filter(Boolean));
+    const collect = (o) => {
+      if (skip.has(o)) return;
+      if (o.isMesh && o.castShadow) for (const m of Array.isArray(o.material) ? o.material : [o.material]) this.exteriorMats.add(m);
+      for (const c of o.children) collect(c);
+    };
+    collect(this.visual.root);
+    this.interiorShadow = false;
+    // Fighters: the pilot sits above the hull line, so the cockpit tub is cut out of the
+    // exterior skin with clipping planes (box in aircraft coordinates) in the cockpit view
+    if (spec.cockpit === 'fighter') {
+      const E = spec.eye;
+      const hw = 0.44,
+        sill = E[1] - 0.65,
+        zf = E[2] - 0.75,
+        zb = E[2] + 1.0;
+      this.tubPlanesLocal = [
+        new THREE.Plane(new THREE.Vector3(0, -1, 0), sill),
+        new THREE.Plane(new THREE.Vector3(0, 0, -1), zf),
+        new THREE.Plane(new THREE.Vector3(0, 0, 1), -zb),
+        new THREE.Plane(new THREE.Vector3(-1, 0, 0), -hw),
+        new THREE.Plane(new THREE.Vector3(1, 0, 0), -hw),
+      ];
+      this.tubPlanes = this.tubPlanesLocal.map((p) => p.clone());
+      this.tubClip = false;
+    }
     // Landing light illuminating the runway at night
     this.landingLight = new THREE.SpotLight(0xfff2dd, 0, 1100, 0.33, 0.55, 1.2);
     this.landingLight.castShadow = false;
@@ -112,6 +141,22 @@ export class PlayerAircraft {
     if (this.sim.ap.modeAPP()) this.game.ui.toast(`Approach armed: ${nav.approach.airport.icao} RWY ${nav.approach.id}`, 'info');
   }
 
+  updateTubClipping(on) {
+    if (!this.tubPlanes) return;
+    if (on) {
+      const root = this.visual.root;
+      root.updateMatrixWorld();
+      for (let i = 0; i < this.tubPlanes.length; i++) this.tubPlanes[i].copy(this.tubPlanesLocal[i]).applyMatrix4(root.matrixWorld);
+    }
+    if (on !== this.tubClip) {
+      this.tubClip = on;
+      for (const m of this.exteriorMats) {
+        m.clippingPlanes = on ? this.tubPlanes : null;
+        m.clipIntersection = on;
+      }
+    }
+  }
+
   // Pick an ILS runway at the destination (or the nearest airport) into the wind
   autoSelectApproach() {
     const nav = this.sim.nav;
@@ -163,10 +208,13 @@ export class PlayerAircraft {
     const night = game.world.night;
     visualStateFromSim(sim, night, this.visState);
     this.visual.update(dt, this.visState);
+    this.updateTubClipping(game.cameras.mode === 'cockpit');
 
     fm.getAttitude(this.attitude);
 
     // Cockpit / cabin visibility and updates
+    // Flight data feed first: the cockpit displays and HUD draw from it
+    this.buildFlightData(dt);
     const camMode = game.cameras.mode;
     const inCockpit = camMode === 'cockpit';
     const inCabin = camMode === 'cabin';
@@ -176,6 +224,11 @@ export class PlayerAircraft {
       this.cabin.update(sim.switches.cabinLights && sim.powered, night);
     }
     this.cockpit.update(dt, night, inCockpit);
+    const inside = inCockpit || inCabin;
+    if (inside !== this.interiorShadow) {
+      this.interiorShadow = inside;
+      for (const m of this.exteriorMats) m.shadowSide = inside ? THREE.FrontSide : null;
+    }
     // Hide the external canopy glass from inside to avoid double reflections
     if (this.visual.parts.canopy) this.visual.parts.canopy.visible = !inCockpit;
 
@@ -204,7 +257,6 @@ export class PlayerAircraft {
     this.updateWarnings();
 
     this.effects.update(dt, game.world, game.weather);
-    this.buildFlightData(dt);
   }
 
   handleEvent(ev) {

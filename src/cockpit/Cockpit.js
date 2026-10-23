@@ -9,7 +9,8 @@ import { KT, FT, FPM } from '../physics/atmosphere.js';
 const DEG = Math.PI / 180;
 
 function mat(color, opts = {}) {
-  return new THREE.MeshStandardMaterial({ color, roughness: opts.roughness ?? 0.75, metalness: opts.metalness ?? 0.15, ...opts });
+  // Interior surfaces receive little sky light: keep the environment contribution low
+  return new THREE.MeshStandardMaterial({ color, roughness: opts.roughness ?? 0.75, metalness: opts.metalness ?? 0.15, envMapIntensity: 0.45, ...opts });
 }
 
 class Display {
@@ -59,6 +60,7 @@ export class Cockpit {
       white: mat(0xe5e5e5, { roughness: 0.6 }),
       floor: mat(0x25282c, { roughness: 1 }),
       wall: mat(0xbfc3c7, { roughness: 0.9 }),
+      wallDark: mat(0x59616b, { roughness: 0.9 }),
       gaPanel: mat(0x1d1f22, { roughness: 0.7 }),
       gaInterior: mat(0x8c8577, { roughness: 0.95 }),
       fighterPanel: mat(0x3b4045, { roughness: 0.85 }),
@@ -209,30 +211,48 @@ export class Cockpit {
     const g = this.group;
     const wide = Math.abs(ex) * 2 + 0.4; // cockpit width-ish
 
-    // Structure
-    this.box(wide + 0.8, 0.02, 2.4, M.floor, 0, -1.05, 0.2);
-    this.box(0.05, 0.9, 2.2, M.wall, -wide / 2 - 0.35, -0.6, 0.2);
-    this.box(0.05, 0.9, 2.2, M.wall, wide / 2 + 0.35, -0.6, 0.2);
-    this.box(wide + 0.8, 1.6, 0.05, M.wall, 0, -0.2, 1.3);
-    // Main instrument panel (tilted)
-    const panel = new THREE.Group();
-    panel.position.set(0, -0.36, -0.82);
-    panel.rotation.x = -0.18;
-    g.add(panel);
-    this.box(wide + 0.55, 0.62, 0.04, M.panel, 0, 0, -0.02, 0, 0, 0, panel);
-    // Glareshield
-    this.box(wide + 0.6, 0.05, 0.36, M.dark, 0, 0.0, -0.72);
-    this.box(wide + 0.6, 0.11, 0.02, M.panel, 0, -0.03, -0.54);
-    // Windshield frame: posts and top frame
-    const postM = M.frame;
-    this.box(0.07, 0.5, 0.06, postM, 0, 0.25, -0.86, -0.45);
+    // Structure (all positions relative to the captain's eye height / station)
+    const sideX = Math.abs(ex) + 0.55; // side wall / side window plane
+    const postX = Math.abs(ex) + 0.4; // front windshield corner posts
+    this.box(sideX * 2, 0.02, 2.4, M.floor, 0, -1.05, 0.2);
     for (const sx of [-1, 1]) {
-      this.box(0.08, 0.55, 0.06, postM, sx * (wide / 2 + 0.05), 0.22, -0.72, -0.4, sx * 0.55);
-      this.box(0.08, 0.5, 0.06, postM, sx * (wide / 2 + 0.3), 0.18, -0.2, -0.1, sx * 0.15);
-      this.box(0.05, 0.08, 0.9, postM, sx * (wide / 2 + 0.33), -0.14, -0.25);
-      this.box(0.05, 0.05, 1.0, postM, sx * (wide / 2 + 0.25), 0.45, -0.3);
+      // Side wall below the side windows and side console
+      this.box(0.05, 0.85, 1.9, M.wallDark, sx * sideX, -0.65, 0.15);
+      this.box(0.22, 0.05, 1.3, M.panel, sx * (sideX - 0.12), -0.56, 0.05);
     }
-    this.box(wide + 0.7, 0.07, 0.08, postM, 0, 0.47, -0.62, -0.5);
+    this.box(sideX * 2, 1.6, 0.05, M.wallDark, 0, -0.2, 1.3);
+    // Main instrument panel, recessed under the glareshield and tilted towards the pilots
+    const panel = new THREE.Group();
+    panel.position.set(0, -0.52, -0.8);
+    panel.rotation.x = -0.15;
+    g.add(panel);
+    this.box(wide + 0.55, 0.56, 0.04, M.panel, 0, 0, -0.02, 0, 0, 0, panel);
+    // Glareshield hood (top ~0.2 m below eye level: ~15 deg over-the-nose view)
+    this.box(postX * 2 + 0.05, 0.04, 0.24, M.dark, 0, -0.22, -0.67);
+    this.box(postX * 2 + 0.05, 0.08, 0.02, M.panel, 0, -0.24, -0.555);
+    // Windshield frame: sill, centre post, corner posts, header, side window frames
+    const postM = M.frame;
+    const baseY = -0.24,
+      baseZ = -0.8,
+      topY = 0.4,
+      topZ = -0.46;
+    const postLen = Math.hypot(topY - baseY, topZ - baseZ);
+    const postTilt = Math.atan2(topZ - baseZ, topY - baseY);
+    this.box(postX * 2 + 0.1, 0.05, 0.08, postM, 0, baseY, baseZ);
+    this.box(0.06, postLen, 0.05, postM, 0, (baseY + topY) / 2, (baseZ + topZ) / 2, postTilt);
+    this.box(postX * 2 + 0.1, 0.06, 0.08, postM, 0, topY, topZ);
+    for (const sx of [-1, 1]) {
+      this.box(0.09, postLen, 0.06, postM, sx * postX, (baseY + topY) / 2, (baseZ + topZ) / 2, postTilt, 0, sx * 0.06);
+      // side windows: sill, top rail and the post between the sliding and fixed windows
+      this.box(0.05, 0.05, 1.0, postM, sx * sideX, baseY + 0.02, -0.3);
+      this.box(0.05, 0.05, 1.0, postM, sx * (sideX - 0.06), topY - 0.04, -0.15);
+      this.box(0.05, 0.62, 0.07, postM, sx * sideX, 0.08, 0.2, 0.12);
+      this.box(0.04, 0.9, 0.05, postM, sx * sideX, -0.15 + 0.35, 0.55);
+      // Fill between the corner post and the side window
+      this.box(Math.abs(sideX - postX) + 0.05, 0.05, 0.36, postM, sx * (postX + sideX) / 2, baseY, -0.66, 0, sx * 0.35, 0);
+    }
+    // Roof
+    this.box(sideX * 2, 0.04, 1.9, M.wallDark, 0, topY + 0.2, 0.45);
     // Displays
     const data = () => this.player.flightData;
     const pfd = new Display(512, 512, (c, w, h) => drawPFD(c, w, h, data()), 24);
@@ -241,19 +261,19 @@ export class Cockpit {
     const sys = new Display(512, 512, (c, w, h) => drawSystems(c, w, h, data()), 6);
     const ds = 0.2;
     const dx = Math.max(0.24, Math.abs(ex) * 0.5);
-    this.displayMesh(pfd, ds, ds, -dx - 0.24, 0.04, 0.005, 0, 0, panel);
-    this.displayMesh(nd, ds, ds, -dx + 0.0, 0.04, 0.005, 0, 0, panel);
-    this.displayMesh(eng, ds, ds, 0, 0.13, 0.005, 0, 0, panel);
-    this.displayMesh(nd, ds, ds, dx - 0.0, 0.04, 0.005, 0, 0, panel);
-    this.displayMesh(pfd, ds, ds, dx + 0.24, 0.04, 0.005, 0, 0, panel);
+    this.displayMesh(pfd, ds, ds, -dx - 0.24, 0.0, 0.005, 0, 0, panel);
+    this.displayMesh(nd, ds, ds, -dx + 0.0, 0.0, 0.005, 0, 0, panel);
+    this.displayMesh(eng, ds, ds, 0, 0.02, 0.005, 0, 0, panel);
+    this.displayMesh(nd, ds, ds, dx - 0.0, 0.0, 0.005, 0, 0, panel);
+    this.displayMesh(pfd, ds, ds, dx + 0.24, 0.0, 0.005, 0, 0, panel);
     // Standby + gear lever area on the panel
-    const gearArm = this.lever(panel, dx * 0.5 + 0.08, -0.16, 0.0, 0.12, 'Landing gear lever', () => (sim.gearLever ? 1 : 0), () => sim.toggleGear(), 0xdddddd, [0.035, 0.035, 0.035]);
+    const gearArm = this.lever(panel, dx * 0.5 + 0.08, -0.19, 0.0, 0.1, 'Landing gear lever', () => (sim.gearLever ? 1 : 0), () => sim.toggleGear(), 0xdddddd, [0.035, 0.035, 0.035]);
     void gearArm;
-    this.caption(panel, 'GEAR', dx * 0.5 + 0.08, -0.25, 0.01, 0.06);
+    this.caption(panel, 'GEAR', dx * 0.5 + 0.08, -0.265, 0.01, 0.06);
     // Gear position lights
     const gearLight = (ox, oy) => {
       const m = new THREE.Mesh(new THREE.CircleGeometry(0.009, 12), new THREE.MeshBasicMaterial({ color: 0x113311 }));
-      m.position.set(dx * 0.5 + 0.14 + ox, -0.12 + oy, 0.003);
+      m.position.set(dx * 0.5 + 0.14 + ox, -0.17 + oy, 0.003);
       panel.add(m);
       this.animated.push(() => {
         const p = sim.gearPos;
@@ -267,16 +287,16 @@ export class Cockpit {
     this.button(panel, -0.05, -0.2, 0.005, 0.03, 0.018, 'Autobrake', () => sim.autobrake !== 'OFF', () => sim.cycleAutobrake(), 0x3cff4a, 'A/BRK');
 
     // Master warning / caution lights on glareshield
-    const mw = this.button(this.group, -0.42, -0.02, -0.52, 0.05, 0.03, 'Master warning (silence)', () => sim.masterWarning && Math.floor(performance.now() / 400) % 2 === 0, () => (this.player.silenced = true), 0xff2020);
-    const mc = this.button(this.group, -0.36, -0.02, -0.52, 0.05, 0.03, 'Master caution (silence)', () => sim.masterCaution && !sim.masterWarning, () => (this.player.silenced = true), 0xffb000);
+    const mw = this.button(this.group, -0.42, -0.25, -0.54, 0.05, 0.03, 'Master warning (silence)', () => sim.masterWarning && Math.floor(performance.now() / 400) % 2 === 0, () => (this.player.silenced = true), 0xff2020);
+    const mc = this.button(this.group, -0.36, -0.25, -0.54, 0.05, 0.03, 'Master caution (silence)', () => sim.masterCaution && !sim.masterWarning, () => (this.player.silenced = true), 0xffb000);
     void mw;
     void mc;
 
     // FCU (autopilot panel) on the glareshield face
     const fcu = new THREE.Group();
-    fcu.position.set(0.02, -0.03, -0.528);
+    fcu.position.set(0.02, -0.24, -0.543);
     g.add(fcu);
-    this.box(0.62, 0.09, 0.012, M.panelLight, 0, 0, -0.006, 0, 0, 0, fcu);
+    this.box(0.62, 0.08, 0.012, M.panelLight, 0, 0, -0.006, 0, 0, 0, fcu);
     const fcuDisp = new Display(512, 64, (c, w, h) => drawFCU(c, w, h, data()), 10);
     const fd = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.0625), new THREE.MeshBasicMaterial({ map: fcuDisp.texture, toneMapped: false }));
     fd.position.set(0, 0.018, 0.001);
@@ -331,8 +351,8 @@ export class Cockpit {
 
     // Overhead panel
     const oh = new THREE.Group();
-    oh.position.set(0, 0.55, -0.2);
-    oh.rotation.x = Math.PI / 2 + 0.35;
+    oh.position.set(0, 0.52, -0.05);
+    oh.rotation.x = Math.PI / 2 + 0.3;
     g.add(oh);
     this.box(wide + 0.1, 0.7, 0.04, M.panel, 0, 0, -0.02, 0, 0, 0, oh);
     const sw = sim.switches;
@@ -382,7 +402,7 @@ export class Cockpit {
     } else {
       for (const sx of [-1, 1]) {
         const yokeG = new THREE.Group();
-        yokeG.position.set(sx * Math.abs(ex), -0.42, -0.5);
+        yokeG.position.set(sx * Math.abs(ex), -0.52, -0.5);
         g.add(yokeG);
         const col = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 0.05), M.panel);
         col.position.y = -0.25;
@@ -399,6 +419,7 @@ export class Cockpit {
         this.animated.push(() => {
           wheel.rotation.z = -this.player.inputs.roll * 0.7;
           yokeG.position.z = -0.5 + this.player.inputs.pitch * 0.07;
+          yokeG.position.y = -0.52;
         });
       }
     }

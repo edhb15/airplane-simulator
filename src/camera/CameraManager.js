@@ -64,9 +64,10 @@ export class CameraManager {
       this.head.tpitch = this.head.pitch = -6 * DEG;
       this.fov = this.baseFov + 5;
     } else if (mode === 'cabin') {
-      this.head.tyaw = this.head.yaw = -80 * DEG * (p ? Math.sign(p.spec.cabinEye[0] || 1) : 1);
-      this.head.tpitch = this.head.pitch = -12 * DEG;
-      this.fov = this.baseFov;
+      // Look out of the window, slightly forward and down towards the wing
+      this.head.tyaw = this.head.yaw = -62 * DEG * (p ? Math.sign(p.spec.cabinEye[0] || 1) : 1);
+      this.head.tpitch = this.head.pitch = -10 * DEG;
+      this.fov = this.baseFov + 10;
     } else if (mode === 'flyby' && p) {
       this.placeFlyby();
     } else if (mode === 'cinematic') {
@@ -182,7 +183,7 @@ export class CameraManager {
       this.head.tpitch = THREE.MathUtils.clamp(this.head.tpitch, -65 * DEG, 80 * DEG);
       this.head.yaw = damp(this.head.yaw, this.head.tyaw, 12, dt);
       this.head.pitch = damp(this.head.pitch, this.head.tpitch, 12, dt);
-      const eye = this.mode === 'cockpit' ? p.spec.eye : p.spec.cabinEye;
+      const eye = this.mode === 'cockpit' ? p.spec.eye : (p.cabin && p.cabin.eye) || p.spec.cabinEye;
       // G-force head movement
       const sf = fm.specificForce;
       const gx = THREE.MathUtils.clamp(-sf.x / 9.81, -2, 2) * 0.012;
