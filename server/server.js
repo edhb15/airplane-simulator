@@ -91,8 +91,11 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
 
+const clientOf = new WeakMap(); // ws -> client, for the heartbeat
+
 wss.on('connection', (ws) => {
   const client = { id: nextId++, ws, room: null, name: 'Pilot', callsign: '', aircraft: 'k172', livery: '', alive: true, stateCount: 0, chatCount: 0, window: Date.now() };
+  clientOf.set(ws, client);
   ws.on('pong', () => (client.alive = true));
   ws.on('message', (raw) => {
     let msg;
@@ -170,7 +173,7 @@ wss.on('connection', (ws) => {
 // Drop dead connections
 setInterval(() => {
   for (const ws of wss.clients) {
-    const c = [...rooms.values()].flatMap((r) => [...r.values()]).find((x) => x.ws === ws);
+    const c = clientOf.get(ws);
     if (c && !c.alive) {
       ws.terminate();
       continue;

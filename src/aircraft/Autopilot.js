@@ -109,7 +109,8 @@ export class Autopilot {
     if (on && !this.athr) {
       this.athrMode = 'SPEED';
       this.thrIntegral = 0;
-      if (!this.spd) this.spd = Math.round(this.fm.ias / KT);
+      // Never chase a target below the stall speed (e.g. an unset or stale selection)
+      if (!this.spd || this.spd < this.spec.speeds.vs) this.spd = Math.max(this.spec.speeds.vs + 20, Math.round(this.fm.ias / KT));
     }
     if (!on && this.athr) this.events.push('athrOff');
     this.athr = on;

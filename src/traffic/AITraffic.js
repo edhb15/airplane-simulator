@@ -284,6 +284,12 @@ class AIAircraft {
         this.accelTo(this.perf.climb, dt, 1.5);
         if (this.pos.y - this.origin.elevation > 300) this.gearPos = Math.max(0, this.gearPos - dt / 6);
         this.flaps = Math.max(0, this.flaps - dt * 2);
+        // Circuit traffic turns into the pattern once safely airborne
+        if (this.patternMode && this.pos.y - this.origin.elevation > 150) {
+          this.state = 'pattern';
+          this.patternLeg = 0;
+          break;
+        }
         const target = this.dest || this.origin;
         const fix = this.finalFix(this.destEnd || this.depEnd);
         if (this.pos.y - this.origin.elevation > 450) this.steerTo(fix.x, fix.z, dt);

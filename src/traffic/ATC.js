@@ -68,6 +68,7 @@ export class ATC {
     this.violations = [];
     this.aiTalkTimer = 0;
     this.runwayCache = new Map();
+    this.queue = []; // delayed radio replies, in simulation time
     // Taxi guidance line
     this.lineMat = new THREE.LineDashedMaterial({ color: 0x3cff6a, dashSize: 6, gapSize: 4, transparent: true, opacity: 0.9, depthWrite: false });
     this.line = null;
@@ -77,7 +78,13 @@ export class ATC {
     this.listeners.push(fn);
   }
 
+  // Run fn after `sec` seconds of (unpaused) simulation time; cleared by reset()
+  later(fn, sec) {
+    this.queue.push({ t: sec, fn });
+  }
+
   reset() {
+    this.queue = [];
     this.state = 'idle';
     this.airport = null;
     this.assignedEnd = null;
@@ -204,14 +211,14 @@ export class ATC {
         const route = this.routeToHold(ap, end, fm.position);
         const w = this.windText();
         const via = route ? route.via : '';
-        setTimeout(() => {
+        this.later(() => {
           this.say(st, `${cs}, ${id === 'pushback' ? 'pushback approved, ' : ''}taxi to runway ${end.id}${via ? ' via ' + via : ''}, hold short. ${w.text}, QNH 1013.`, `${scs}, ${id === 'pushback' ? 'push back approved, ' : ''}taxi to runway ${sayRunway(end.id)}${via ? ' via ' + via.split('').join(' ') : ''}, hold short. ${w.speech}, QNH one zero one three.`);
           this.instruction = `Taxi to RWY ${end.id}${via ? ' via ' + via : ''}, hold short`;
           this.state = 'taxiing';
           this.clearances.taxi = true;
           if (route) this.setTaxiPath(route.points);
           this.setDepartureApproach(ap, end);
-        }, 1200);
+        }, 1.2);
         break;
       }
       case 'ready': {
@@ -220,7 +227,7 @@ export class ATC {
         this.assignedEnd = end;
         this.airport = ap;
         this.playerSay(st, `${st.name}, ${cs}, ready for departure runway ${end.id}.`);
-        setTimeout(() => {
+        this.later(() => {
           const traffic = !this.game.traffic || this.game.traffic.runwayFreeForDeparture(ap, end, null);
           const w = this.windText();
           if (traffic) {
@@ -235,7 +242,7 @@ export class ATC {
             this.instruction = `Hold short RWY ${end.id} — traffic`;
             this.pendingTakeoff = { end, t: 20 };
           }
-        }, 1300);
+        }, 1.3);
         break;
       }
       case 'taxiGate': {
@@ -243,7 +250,7 @@ export class ATC {
         this.playerSay(st, `${st.name}, ${cs}, request taxi to the gate.`);
         const L = LAYOUTS.get(ap.icao);
         const gate = this.game.traffic ? this.game.traffic.freeGate(ap, c.p.spec) : L.gates[0];
-        setTimeout(() => {
+        this.later(() => {
           if (!gate) {
             this.say(st, `${cs}, no gates available, hold position.`, `${scs}, no gates available, hold position.`);
             return;
@@ -256,7 +263,7 @@ export class ATC {
           if (route) this.setTaxiPath([{ x: fm.position.x, z: fm.position.z }, ...route.map((n) => ({ x: n.x, z: n.z }))]);
           this.instruction = `Taxi to gate ${gname}`;
           this.state = 'taxiIn';
-        }, 1200);
+        }, 1.2);
         break;
       }
       case 'atis': {
@@ -285,7 +292,7 @@ export class ATC {
           c.p.sim.nav.destination = target;
         }
         this.game.missions && this.game.missions.buildApproachGuidance && this.game.settings.get('gameplay').guidance && !this.game.missions.guide && this.game.missions.buildApproachGuidance(useEnd);
-        setTimeout(() => {
+        this.later(() => {
           const alt = Math.round((target.elevation / FT + 3000) / 100) * 100;
           this.state = 'approach';
           this.approachAlt = alt;
@@ -294,7 +301,7 @@ export class ATC {
           else this.say(st, `${cs}, make straight-in approach runway ${useEnd.id}, report 5 mile final.`, `${scs}, make straight in approach runway ${sayRunway(useEnd.id)}, report five mile final.`);
           this.instruction = `${id === 'ils' ? 'ILS' : 'Visual'} RWY ${useEnd.id} — descend ${fmtAlt(alt)}`;
           this.vectoring = id === 'ils';
-        }, 1400);
+        }, 1.4);
         break;
       }
       case 'climb':
@@ -303,31 +310,31 @@ export class ATC {
         const cur = fm.position.y / FT;
         const tgt = Math.max(2000, Math.round((cur + (id === 'climb' ? 4000 : -4000)) / 1000) * 1000);
         this.playerSay(st, `${st.name}, ${cs}, request ${id === 'climb' ? 'higher' : 'lower'}.`);
-        setTimeout(() => {
+        this.later(() => {
           this.say(st, `${cs}, ${id === 'climb' ? 'climb' : 'descend'} and maintain ${fmtAlt(tgt)}.`, `${scs}, ${id === 'climb' ? 'climb' : 'descend'} and maintain ${sayAlt(tgt)}.`);
           this.instruction = `${id === 'climb' ? 'Climb' : 'Descend'} ${fmtAlt(tgt)}`;
           c.p.sim.ap.alt = tgt;
-        }, 1200);
+        }, 1.2);
         break;
       }
       case 'direct': {
         const st = this.station(ap, 'center');
         this.playerSay(st, `${st.name}, ${cs}, request direct ${c.dest.icao}.`);
-        setTimeout(() => {
+        this.later(() => {
           this.say(st, `${cs}, cleared direct ${c.dest.icao}.`, `${scs}, cleared direct ${c.dest.icao.split('').join(' ')}.`);
           const nav = c.p.sim.nav;
           nav.directTo(nav.plan.length - 1);
           this.instruction = `Direct ${c.dest.icao}`;
-        }, 1100);
+        }, 1.1);
         break;
       }
       case 'following': {
         const st = this.station(ap, 'center');
         this.playerSay(st, `${st.name}, ${cs}, ${fmtAlt(fm.position.y / FT)}, request flight following.`);
-        setTimeout(() => {
+        this.later(() => {
           this.say(st, `${cs}, radar contact, ${Math.round(c.dist / NM)} miles from ${shortName(ap)}. Maintain VFR.`, `${scs}, radar contact. Maintain V F R.`);
           this.state = 'enroute';
-        }, 1200);
+        }, 1.2);
         break;
       }
       case 'mayday': {
@@ -335,7 +342,7 @@ export class ATC {
         if (this.emergency) {
           this.emergency = false;
           this.playerSay(st, `${st.name}, ${cs}, cancel emergency.`);
-          setTimeout(() => this.say(st, `${cs}, roger, emergency cancelled.`, `${scs}, roger.`), 900);
+          this.later(() => this.say(st, `${cs}, roger, emergency cancelled.`, `${scs}, roger.`), 0.9);
           break;
         }
         this.emergency = true;
@@ -347,13 +354,13 @@ export class ATC {
         this.assignedEnd = end;
         c.p.sim.nav.setApproach(end);
         c.p.sim.nav.destination = tgt;
-        setTimeout(() => {
+        this.later(() => {
           const brg = (Math.atan2(tgt.x - fm.position.x, -(tgt.z - fm.position.z)) / DEG + 360) % 360;
           this.say(st, `${cs}, MAYDAY acknowledged. Nearest suitable airport ${tgt.name}, bearing ${String(Math.round(brg)).padStart(3, '0')}, ${Math.round(near.distance / NM)} miles. Runway ${end.id}, all runways available, emergency services standing by. Cleared to land any runway.`, `${scs}, mayday acknowledged. ${shortName(tgt)} bearing ${sayHeading(brg)}, ${digits(Math.round(near.distance / NM))} miles. Cleared to land, any runway.`);
           this.clearances.landing = true;
           this.state = 'clearedLand';
           this.instruction = `MAYDAY — ${tgt.icao} RWY ${end.id}, cleared to land`;
-        }, 1200);
+        }, 1.2);
         break;
       }
     }
@@ -408,6 +415,12 @@ export class ATC {
 
   // ---------------------------------------------------------------- automatic
   update(dt) {
+    if (this.queue.length) {
+      for (const q of this.queue) q.t -= dt;
+      const due = this.queue.filter((q) => q.t <= 0);
+      this.queue = this.queue.filter((q) => q.t > 0);
+      for (const q of due) q.fn();
+    }
     const c = this.context();
     if (!c || c.p.sim.crashed) return;
     const cs = this.callsign();
@@ -535,7 +548,7 @@ export class ATC {
       scs = sayCallsign(cs);
     const w = this.windText();
     const voice = ['pilot2', 'pilot3'][ai.id % 2];
-    const delay = (fn) => setTimeout(fn, 1500);
+    const delay = (fn) => this.later(fn, 1.5);
     switch (kind) {
       case 'pushback': {
         const st = this.station(ap, 'ground');

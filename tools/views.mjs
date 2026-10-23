@@ -1,5 +1,5 @@
 // Screenshots of the cockpit / cabin / external views for a list of aircraft.
-// Usage: node tools/views.mjs [url] [outDir] [ids] [modes] [spawn]
+// Usage: node tools/views.mjs [url] [outDir] [ids] [modes] [spawn] [time] [weather]
 //   e.g. node tools/views.mjs http://localhost:5173/ screenshots mj320,k172 cockpit,cabin runway
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -12,7 +12,7 @@ try {
   const req = createRequire(execSync('npm root -g').toString().trim() + '/');
   ({ chromium } = req('playwright'));
 }
-const [url = 'http://localhost:5173/', outDir = 'screenshots', ids = 'mj320', modes = 'cockpit,cabin,chase', spawn = 'runway'] = process.argv.slice(2);
+const [url = 'http://localhost:5173/', outDir = 'screenshots', ids = 'mj320', modes = 'cockpit,cabin,chase', spawn = 'runway', time = '11', weather = 'fewClouds'] = process.argv.slice(2);
 mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 760 } });
@@ -24,8 +24,8 @@ await page.addStyleTag({ content: '*, *::before, *::after { animation-duration: 
 await page.waitForFunction(() => window.__sim && window.__sim.state === 'menu', null, { timeout: 120000, polling: 500 });
 for (const id of ids.split(',')) {
   await page.evaluate(
-    ([id, spawn]) => window.__sim.startFlight({ aircraftId: id, airport: 'AXMI', spawn, time: 11, weather: 'fewClouds', wind: { dir: 270, speed: 4 } }),
-    [id, spawn]
+    ([id, spawn, time, weather]) => window.__sim.startFlight({ aircraftId: id, airport: 'AXMI', spawn, time: Number(time), weather, wind: { dir: 270, speed: 4 } }),
+    [id, spawn, time, weather]
   );
   await page.waitForFunction(() => window.__sim.state === 'flying', null, { timeout: 120000, polling: 500 });
   for (const mode of modes.split(',')) {
@@ -34,7 +34,7 @@ for (const id of ids.split(',')) {
       window.__sim.settings.set('hud', 'cockpitHud', 'off');
     }, mode);
     await page.waitForTimeout(2500);
-    await page.screenshot({ path: `${outDir}/view-${id}-${mode}.png` });
+    await page.screenshot({ path: `${outDir}/view-${id}-${mode}${weather !== 'fewClouds' || time !== '11' ? `-${weather}-${time}` : ''}.png` });
     console.log('shot', id, mode);
   }
 }

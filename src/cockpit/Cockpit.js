@@ -662,7 +662,7 @@ export class Cockpit {
 
   update(dt, night, active) {
     for (const a of this.animated) a();
-    this.flood.intensity = active ? night * 0.6 : 0;
+    this.flood.intensity = active ? night * 1.3 : 0;
     if (!active) return;
     const data = this.player.flightData;
     for (const d of this.displays) d.update(dt, data);

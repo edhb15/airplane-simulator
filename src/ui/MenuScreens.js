@@ -995,7 +995,7 @@ export class MenuScreens {
                 render();
               },
             },
-            `${c.icon} ${c.name.split(' ')[0]} `,
+            `${c.icon} ${c.name.split(' ')[0].replace(/-$/, '')} `,
             el('small.muted', null, `${done}/${total}`)
           )
         );
@@ -1020,11 +1020,16 @@ export class MenuScreens {
               this.missionDetail(detail);
             },
           },
-          locked ? el('div.lock', null, `🔒 ${RANKS[m.requiredRank].name}`) : rec ? el('div.lock', null, stars(rec.stars)) : null,
+          rec && !locked ? el('div.lock', null, stars(rec.stars)) : null,
           el('h3', null, m.title),
           el('div.meta', null, `${'●'.repeat(m.difficulty || 1)}${'○'.repeat(Math.max(0, 3 - (m.difficulty || 1)))}  ·  ${m.aircraft.map((a) => getAircraft(a).name.split(' ').slice(-1)[0]).join(' / ')}`),
           el('div.desc', null, m.briefing.length > 130 ? m.briefing.slice(0, 128) + '…' : m.briefing),
-          el('div.foot', null, el('span.reward', null, `${fmtMoney(m.reward.credits)} · ${m.reward.xp} XP`), rec ? el('span.tag.green', null, `Best ${rec.bestScore}`) : null)
+          el(
+            'div.foot',
+            null,
+            el('span.reward', null, `${fmtMoney(m.reward.credits)} · ${m.reward.xp} XP`),
+            locked ? el('span.tag.red', null, `🔒 ${RANKS[m.requiredRank].name}`) : rec ? el('span.tag.green', null, `Best ${rec.bestScore}`) : null
+          )
         );
         cards.appendChild(card);
       });

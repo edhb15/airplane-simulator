@@ -30,7 +30,7 @@ import { ATC } from '../traffic/ATC.js';
 import { MissionManager } from '../missions/MissionManager.js';
 import { Multiplayer } from '../net/Multiplayer.js';
 import { UIManager } from '../ui/UIManager.js';
-import { KT, FT, NM, DEG } from '../physics/atmosphere.js';
+import { KT, FT, NM, DEG, atmosphere, tasToIas } from '../physics/atmosphere.js';
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
@@ -275,7 +275,8 @@ export class Game {
     if (spawn.mode === 'air' && spec.autopilot.athr && (config.mission || config.spawn === 'final')) {
       sim.ap.engage();
       sim.ap.setAthr(true);
-      sim.ap.spd = Math.round(sim.fm.ias / KT);
+      // fm.ias is only valid after the first physics step: derive it from the spawn TAS
+      sim.ap.spd = Math.round(tasToIas(spawn.speed, atmosphere(spawn.altitude).rho) / KT);
       sim.ap.modeALT();
     }
     if (config.coldDark) sim.spawn({ ...spawn, coldDark: true, fuelFrac: config.fuel ?? 0.6 });
@@ -300,7 +301,7 @@ export class Game {
     // Wait for terrain tiles near the aircraft
     this.cameras.update(0.016);
     const t0 = performance.now();
-    while (performance.now() - t0 < 15000) {
+    while (config.waitForScenery !== false && performance.now() - t0 < 15000) {
       await new Promise((r) => setTimeout(r, 150));
       this.cameras.update(0.016);
       const pend = this.world.terrain.pendingCount(this.camera.position);
