@@ -529,8 +529,8 @@ export const TUTORIALS = [
     steps: [
       { text: 'You are on the downwind leg at 1,000 ft above Pine Valley, flying parallel to runway 22 in the opposite direction. Follow the green guidance boxes.', wait: 6 },
       { text: 'Reduce power to about 50% and extend 10° of flaps with F.', keys: 'Ctrl / F', check: (g) => sim(g).flapsIndex >= 1 && sim(g).throttleLever < 0.65 },
-      { text: 'When abeam the runway end has passed (follow the boxes), turn left onto base leg and start descending at 500 fpm.', check: (g) => g.mission && g.mission.guideProgress > 0.35 },
-      { text: 'Turn left onto final. Line up with the runway centreline. Extend full flaps (F) and fly 65 knots.', keys: 'F', check: (g) => sim(g).flapsIndex >= 2 && g.mission && g.mission.guideProgress > 0.7 },
+      { text: 'When abeam the runway end has passed (follow the boxes), turn left onto base leg and start descending at 500 fpm.', check: (g) => g.missions && g.missions.guideProgress > 0.35 },
+      { text: 'Turn left onto final. Line up with the runway centreline. Extend full flaps (F) and fly 65 knots.', keys: 'F', check: (g) => sim(g).flapsIndex >= 2 && g.missions && g.missions.guideProgress > 0.7 },
       { text: 'The PAPI lights left of the runway show two white and two red when on the glide path. Aim for the touchdown markers.', check: (g) => snap(g).radioAlt < 100 },
       { text: 'Over the threshold: reduce power to idle and gently raise the nose (flare) to touch down softly.', keys: 'Ctrl / S', check: (g) => snap(g).onGround },
       { text: 'Touchdown! Hold B to brake and use Q/E to stay on the centreline until stopped.', keys: 'B', check: (g) => snap(g).onGround && snap(g).gs < 5 },

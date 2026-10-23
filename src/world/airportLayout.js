@@ -296,7 +296,7 @@ function buildLayout(ap) {
     const hv = side === 0 ? termV : termV;
     const big = ap.type !== 'ga';
     L.buildings.push({ kind: 'hangar', u: hu, v: hv, w: big ? 80 : 26, d: big ? 70 : 22, h: big ? 24 : 8, facing: termFacing || 1 });
-    L.hangars.push({ u: hu, v: hv });
+    L.hangars.push({ u: hu, v: hv, laneV: laneV ?? hv, w: big ? 80 : 26, d: big ? 70 : 22 });
     L.rects.push({ u0: hu - (big ? 45 : 15), u1: hu + (big ? 45 : 15), v0: Math.min(hv, laneV ?? hv) - 40, v1: Math.max(hv, laneV ?? hv) + 40, kind: 'apron' });
   }
   if (ap.type !== 'ga') {

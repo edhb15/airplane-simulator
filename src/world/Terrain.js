@@ -203,7 +203,9 @@ export class Terrain {
       if (n.state !== 'none') continue;
       n.state = 'pending';
       this.inFlight.add(n.key);
-      const w = this.workers[this.nextWorker++ % this.workers.length];
+      // Keep tiles off the worker that is busy rendering the map image
+      const pool = this.mapBusy && this.workers.length > 1 ? this.workers.length - 1 : this.workers.length;
+      const w = this.workers[this.nextWorker++ % pool];
       w.postMessage({ type: 'tile', key: n.key, x0: n.x0, z0: n.z0, size: n.size, n: N, skirtDepth: Math.max(4, (n.size / N) * 1.2) });
     }
     // Drop stale requests that were not refreshed this frame
@@ -239,6 +241,7 @@ export class Terrain {
       if (cb) {
         if (msg.type === 'map') {
           this.mapCallbacks.delete(msg.id);
+          this.mapBusy = this.mapCallbacks.size > 0;
           cb.done(msg);
         } else if (cb.progress) cb.progress(msg.progress);
       }
@@ -288,7 +291,8 @@ export class Terrain {
     return new Promise((resolve) => {
       const id = Math.random().toString(36).slice(2);
       this.mapCallbacks.set(id, { done: resolve, progress: onProgress });
-      this.workers[0].postMessage({ type: 'map', id, x0, z0, size, w, h });
+      this.mapBusy = true;
+      this.workers[this.workers.length - 1].postMessage({ type: 'map', id, x0, z0, size, w, h });
     });
   }
 

@@ -261,6 +261,14 @@ export class MissionManager {
     this.guide.approachOnly = true;
   }
 
+  // Replace the approach guidance boxes (e.g. after selecting a runway on the map)
+  setApproachGuidance(end) {
+    if (this.kind === 'tutorial' || (this.guide && !this.guide.approachOnly)) return;
+    if (this.guide) this.game.scene.remove(this.guide.group);
+    this.guide = null;
+    if (end && this.game.settings.get('gameplay').guidance) this.buildApproachGuidance(end);
+  }
+
   // ---------------------------------------------------------------- events
   onTouchdown(ev) {
     const p = this.game.player;

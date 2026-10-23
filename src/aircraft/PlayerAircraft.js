@@ -8,7 +8,7 @@ import { AircraftVisual, visualStateFromSim } from './AircraftVisual.js';
 import { Cockpit } from '../cockpit/Cockpit.js';
 import { CabinInterior, hasCabin } from '../cockpit/CabinInterior.js';
 import { AircraftEffects } from './Effects.js';
-import { AIRPORT_INFO } from '../world/airportGeometry.js';
+import { AIRPORT_INFO, nearestAirport, bestRunwayEnd } from '../world/airportGeometry.js';
 import { KT, FT, FPM, DEG } from '../physics/atmosphere.js';
 import { fmtTime, fmtDuration } from '../core/format.js';
 
@@ -102,13 +102,29 @@ export class PlayerAircraft {
   armApproach() {
     const nav = this.sim.nav;
     if (!nav.approach) {
-      const end = this.game.nav?.autoSelectApproach(this);
-      if (!end) {
+      const end = this.autoSelectApproach();
+      if (end) nav.setApproach(end);
+      else {
         this.game.ui.toast('No ILS approach selected — choose a runway in the map / ATC menu', 'warn');
         return;
       }
     }
     if (this.sim.ap.modeAPP()) this.game.ui.toast(`Approach armed: ${nav.approach.airport.icao} RWY ${nav.approach.id}`, 'info');
+  }
+
+  // Pick an ILS runway at the destination (or the nearest airport) into the wind
+  autoSelectApproach() {
+    const nav = this.sim.nav;
+    const pos = this.position;
+    let ap = nav.destination;
+    if (!ap || Math.hypot(ap.x - pos.x, ap.z - pos.z) > 120000) ap = nearestAirport(pos.x, pos.z).airport;
+    if (!ap) return null;
+    const ws = this.game.weather.state;
+    const minLen = this.spec.mass.maxTakeoff > 150000 ? 2400 : this.spec.mass.maxTakeoff > 30000 ? 1600 : 500;
+    const best = bestRunwayEnd(ap, ws.windDir, Math.max(3, ws.windSpeed), minLen);
+    if (best && best.ils) return best;
+    const ils = ap.runwayObjs.flatMap((r) => r.ends).filter((e) => e.ils);
+    return ils[0] || best || null;
   }
 
   update(dt, input) {

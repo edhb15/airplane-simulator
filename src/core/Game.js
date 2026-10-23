@@ -158,6 +158,7 @@ export class Game {
     this.traffic = new AITraffic(this);
     this.missions = new MissionManager(this);
     this.multiplayer = new Multiplayer(this);
+    this.ui.bindSystems();
     this.applyGraphicsSettings();
     this.settings.on('change', (e) => {
       if (e.section === 'graphics' || e.section === '*') this.applyGraphicsSettings();
@@ -197,7 +198,14 @@ export class Game {
     const id = aircraftId || 'mj320';
     const spec = getAircraft(id);
     const L = layoutFor('AXMI');
-    const gate = L.gates[1];
+    // Showcase stand: on the apron in front of the first hangar, nose pointing out
+    const H = L.hangars[0];
+    const out = Math.sign(H.laneV - H.v) || 1;
+    const fus = spec.model.fuselage;
+    const off = H.d / 2 + 16 + (fus.tailZ - fus.noseZ) * 0.55;
+    const pA = L.world(H.u, H.v + out * off),
+      pB = L.world(H.u, H.v + out * (off + 10));
+    const gate = { x: pA.x, z: pA.z, heading: ((Math.atan2(pB.x - pA.x, -(pB.z - pA.z)) / DEG) + 360) % 360 };
     if (this.showcase) {
       this.scene.remove(this.showcase.root);
       this.showcase.dispose();
@@ -210,7 +218,6 @@ export class Game {
     this.scene.add(this.showcase.root);
     this.showcaseSpec = spec;
     this.showcaseState = { gearPos: 1, lights: { nav: true, beacon: true, strobe: false, landing: false, taxi: false }, engines: spec.engine.list.map(() => ({ rpm: 0.25 })), gear: spec.gear.points.map(() => ({ compression: (spec.gear.travel || 0.3) * 0.35 })) };
-    gate.reserved = true;
     if (!this.menuInit) {
       this.menuInit = true;
       this.world.time = 18.35;
@@ -271,6 +278,8 @@ export class Game {
       sim.ap.modeALT();
     }
     if (config.coldDark) sim.spawn({ ...spawn, coldDark: true, fuelFrac: config.fuel ?? 0.6 });
+    // Lessons start with the parking brake set so the student releases it
+    if (config.tutorial && spawn.mode === 'runway') sim.parkingBrake = true;
     // Navigation for free flights
     const nav = sim.nav;
     if (!config.mission) {
@@ -333,8 +342,9 @@ export class Game {
       const gy = terrainHeight(gate.x, gate.z);
       return { mode: 'parked', x: gate.x, z: gate.z, heading: gate.heading * DEG, groundH: gy, airport: icao };
     }
+    const rwy = (start && start.runway) || config.runway;
     if (mode === 'final') {
-      const end = (config.runway && getRunwayEnd(icao, config.runway)) || this.atc.activeRunway(ap, minLen);
+      const end = (rwy && getRunwayEnd(icao, rwy)) || this.atc.activeRunway(ap, minLen);
       const s = MissionManager.spawnFor({ final: { airport: icao, runway: end.id, nm: 10, altFt: 3000 } }, spec);
       s.gearDown = true;
       s.airport = icao;
@@ -345,7 +355,7 @@ export class Game {
       return { mode: 'air', x: ap.x - Math.sin(hdg * DEG) * 8000, z: ap.z + Math.cos(hdg * DEG) * 8000, altitude: ap.elevation + (config.altitudeFt || 5000) * FT, heading: hdg * DEG, speed: Math.min(spec.speeds.cruise * 0.75, spec.speeds.vref * 1.7) * KT, airport: icao };
     }
     // runway
-    const end = (config.runway && getRunwayEnd(icao, config.runway)) || this.atc.activeRunway(ap, minLen);
+    const end = (rwy && getRunwayEnd(icao, rwy)) || this.atc.activeRunway(ap, minLen);
     const x = end.x + end.dirX * 25,
       z = end.z + end.dirZ * 25;
     this.atc.assignedEnd = end;
@@ -620,7 +630,8 @@ export class Game {
     const p = this.player;
     if (!p) return;
     const simRate = p.sim.simRate;
-    const running = !this.paused && this.state === 'flying';
+    // Keep simulating a crashed aircraft behind the debrief so fire & smoke stay alive
+    const running = !this.paused && (this.state === 'flying' || (this.state === 'debrief' && p.sim.crashed));
     if (running) {
       p.update(dt, this.input);
       // Building collisions

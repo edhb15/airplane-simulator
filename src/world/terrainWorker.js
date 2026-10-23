@@ -124,28 +124,38 @@ self.onmessage = (e) => {
     const r = build(msg);
     self.postMessage({ type: 'tile', ...r }, [r.pos.buffer, r.nor.buffer, r.col.buffer]);
   } else if (msg.type === 'map') {
-    // Low resolution coloured map image for the navigation display
+    // Low resolution coloured, hill-shaded map image (one height sample per pixel)
     const { w, h, x0, z0, size } = msg;
     const img = new Uint8ClampedArray(w * h * 4);
     const c = [0, 0, 0];
+    const px = size / w;
+    let prevRow = new Float32Array(w + 1);
+    let curRow = new Float32Array(w + 1);
+    const sample = (row, j) => {
+      const z = z0 + ((j + 0.5) / h) * size;
+      for (let i = 0; i <= w; i++) row[i] = terrainHeight(x0 + ((i + 0.5) / w) * size, z);
+    };
+    sample(prevRow, 0);
     for (let j = 0; j < h; j++) {
+      sample(curRow, j + 1);
+      const z = z0 + ((j + 0.5) / h) * size;
       for (let i = 0; i < w; i++) {
         const x = x0 + ((i + 0.5) / w) * size;
-        const z = z0 + ((j + 0.5) / h) * size;
-        const hh = terrainHeight(x, z);
-        const hx = terrainHeight(x + size / w, z);
-        const hz = terrainHeight(x, z + size / h);
-        terrainColor(x, z, hh, 0.95, c);
-        let r = Math.sqrt(c[0]),
-          g = Math.sqrt(c[1]),
-          b = Math.sqrt(c[2]);
+        const hh = prevRow[i];
+        const hx = prevRow[i + 1];
+        const hz = curRow[i];
+        let r, g, b;
         if (hh < 0) {
           const d = Math.min(1, -hh / 80);
           r = 0.1 + 0.15 * (1 - d);
           g = 0.28 + 0.2 * (1 - d);
           b = 0.45 + 0.15 * (1 - d);
         } else {
-          const shade = Math.max(0.55, Math.min(1.35, 1 + ((hh - hx) + (hh - hz)) / (size / w) * 1.5));
+          terrainColor(x, z, hh, 0.95, c);
+          r = Math.sqrt(c[0]);
+          g = Math.sqrt(c[1]);
+          b = Math.sqrt(c[2]);
+          const shade = Math.max(0.55, Math.min(1.35, 1 + ((hh - hx) + (hh - hz)) / px * 1.5));
           const tint = Math.min(1, hh / 3000);
           r = (r * (1 - tint * 0.4) + tint * 0.5) * shade;
           g = (g * (1 - tint * 0.4) + tint * 0.45) * shade;
@@ -157,6 +167,9 @@ self.onmessage = (e) => {
         img[k + 2] = b * 255;
         img[k + 3] = 255;
       }
+      const t = prevRow;
+      prevRow = curRow;
+      curRow = t;
       if (j % 32 === 0) self.postMessage({ type: 'mapProgress', id: msg.id, progress: j / h });
     }
     self.postMessage({ type: 'map', id: msg.id, w, h, img }, [img.buffer]);
