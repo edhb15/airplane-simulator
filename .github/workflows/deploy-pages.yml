@@ -4,7 +4,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, claude/keen-gates-5v2oxh]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
