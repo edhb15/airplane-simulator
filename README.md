@@ -22,6 +22,16 @@ PORT=9000 npm run server   # serve an existing build on another port
 
 For multiplayer while developing, run `npm run dev` and `npm run server` side by side; the client connects to `ws://<host>:8080/ws` by default.
 
+### GitHub Pages
+
+The game must be served from the Vite build (`dist/`), not from the source files. The workflow in `.github/workflows/deploy-pages.yml` builds, tests and publishes it on every push to `main`:
+
+1. In the repository go to **Settings → Pages → Build and deployment** and set **Source** to **GitHub Actions**.
+2. Push to `main` (or run the *Deploy to GitHub Pages* workflow manually from the Actions tab).
+3. The site is published at `https://<user>.github.io/<repo>/`.
+
+GitHub Pages only hosts static files, so on Pages the Multiplayer screen starts in *Local (browser tabs)* mode. To fly online, host `npm run server` somewhere reachable and enter its `wss://…/ws` address.
+
 ## Features
 
 ### Aircraft

@@ -1188,7 +1188,7 @@ export class MenuScreens {
     const right = el('div.panel.interactive.col', { style: { flex: '1', padding: '18px 22px', minWidth: '0' } });
     body.appendChild(left);
     body.appendChild(right);
-    const cfg = (this.mpCfg = this.mpCfg || { mode: 'server', url: mp.defaultUrl(), room: 'public' });
+    const cfg = (this.mpCfg = this.mpCfg || { mode: mp.staticHost ? 'local' : 'server', url: mp.defaultUrl(), room: 'public' });
     const status = el('div.muted', { style: { marginTop: '10px', fontSize: '13px' } }, mp.connected ? `Connected — room “${mp.room}”` : 'Not connected');
     const nameIn = el('input', { type: 'text', maxLength: 24 });
     nameIn.value = p.data.name;
@@ -1202,7 +1202,8 @@ export class MenuScreens {
     left.appendChild(row('Name', nameIn));
     left.appendChild(row('Callsign', csIn));
     left.appendChild(el('div.section-title', null, 'Session'));
-    const urlRow = row('Server address', urlIn, 'Run “npm run server” to host');
+    urlIn.placeholder = 'wss://your-server.example.com/ws';
+    const urlRow = row('Server address', urlIn, mp.staticHost ? 'This site is static — enter the address of a relay server started with “npm run server”' : 'Run “npm run server” to host');
     left.appendChild(
       row(
         'Connection',
@@ -1229,6 +1230,10 @@ export class MenuScreens {
         return;
       }
       cfg.url = urlIn.value.trim();
+      if (cfg.mode === 'server' && !cfg.url) {
+        status.textContent = 'Enter a relay server address (wss://…/ws) or use Local mode.';
+        return;
+      }
       cfg.room = roomIn.value.trim() || 'public';
       p.data.name = nameIn.value.trim() || p.data.name;
       p.data.callsign = csIn.value.trim().toUpperCase() || p.data.callsign;

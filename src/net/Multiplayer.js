@@ -153,8 +153,15 @@ export class Multiplayer {
     for (const fn of this.listeners) fn(ev);
   }
 
+  // Static hosts (GitHub Pages) cannot run the relay server: there is no default
+  // server address there and the menu starts in local (browser tabs) mode
+  get staticHost() {
+    return /\.github\.io$/i.test(window.location.hostname);
+  }
+
   defaultUrl() {
     const loc = window.location;
+    if (this.staticHost) return '';
     if (loc.port === '5173' || loc.port === '4173') return `ws://${loc.hostname}:8080/ws`;
     return `${loc.protocol === 'https:' ? 'wss' : 'ws'}://${loc.host}/ws`;
   }
