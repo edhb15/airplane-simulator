@@ -29,6 +29,7 @@ import { AITraffic } from '../traffic/AITraffic.js';
 import { ATC } from '../traffic/ATC.js';
 import { MissionManager } from '../missions/MissionManager.js';
 import { Multiplayer } from '../net/Multiplayer.js';
+import { CombatManager } from '../combat/Combat.js';
 import { UIManager } from '../ui/UIManager.js';
 import { KT, FT, NM, DEG, atmosphere, tasToIas } from '../physics/atmosphere.js';
 
@@ -159,6 +160,7 @@ export class Game {
     this.traffic = new AITraffic(this);
     this.missions = new MissionManager(this);
     this.multiplayer = new Multiplayer(this);
+    this.combat = new CombatManager(this);
     this.ui.bindSystems();
     this.applyGraphicsSettings();
     this.settings.on('change', (e) => {
@@ -251,6 +253,7 @@ export class Game {
     this.missions.cleanup();
     this.atc.reset();
     this.traffic.clear();
+    this.combat.reset();
     const spec = getAircraft(config.aircraftId);
     const gp = this.settings.get('gameplay');
     // Environment
@@ -429,6 +432,7 @@ export class Game {
     this.missions.cleanup();
     this.atc.reset();
     this.traffic.clear();
+    this.combat.reset();
     this.menuInit = false;
     this.setupMenuScene();
     this.state = 'menu';
@@ -472,6 +476,7 @@ export class Game {
 
   trafficFor(pos) {
     const list = this.traffic.trafficFor(pos);
+    list.push(...this.combat.trafficFor(pos));
     if (this.multiplayer.connected) list.push(...this.multiplayer.trafficFor(pos));
     return list;
   }
@@ -642,6 +647,7 @@ export class Game {
         const b = this.cities.collide(fm.position, p.spec.wing.span * 0.35);
         if (b) fm.crash('Collision with a building');
       }
+      this.combat.update(dt);
       this.missions.update(dt);
       this.atc.update(dt);
       this.traffic.update(dt * simRate);

@@ -421,6 +421,28 @@ export const MISSIONS = [
     reward: { credits: 9000, xp: 700 },
   },
   {
+    id: 'mil-gunnery',
+    category: 'military',
+    title: 'Gunnery Range',
+    difficulty: 2,
+    requiredRank: 0,
+    aircraft: ['fx16', 'ef2'],
+    briefing:
+      'Live-fire training on the Ironwood range. Five remote-controlled target drones are orbiting north of the air base. Shoot them all down with the cannon — hold Space and put the gunsight pipper on the target — then return to Ironwood and land. Ammunition is limited: fire short bursts from close range.',
+    start: { air: { x: 76000, z: -14000, altFt: 6000, heading: 0, kt: 380 } },
+    destination: 'AXIW',
+    route: [{ id: 'RANGE', name: 'Gunnery range', x: 76000, z: -38000 }],
+    approach: '36',
+    time: 14,
+    weather: 'fewClouds',
+    wind: { dir: 350, speed: 4 },
+    payload: {},
+    fuel: 0.6,
+    drones: { x: 76000, z: -38000, altFt: 6000, count: 5, spread: 4500 },
+    objectives: [{ type: 'destroy', count: 5 }, { type: 'land', airport: 'AXIW' }, { type: 'stop' }],
+    reward: { credits: 8500, xp: 600 },
+  },
+  {
     id: 'mil-intercept',
     category: 'military',
     title: 'Scramble!',
@@ -601,7 +623,8 @@ export const TUTORIALS = [
         if (st.up && Math.abs(snap(g).bank) > 150) st.inverted = true;
         return st.up && st.inverted && Math.abs(snap(g).pitch) < 20 && Math.abs(snap(g).bank) < 30;
       } },
-      { text: 'Outstanding flying! Try the Canyon Run and Scramble missions next.', wait: 5, final: true },
+      { text: 'Weapons: hold Space (gamepad A, joystick trigger) to fire the cannon. Watch the tracers, the gunsight pipper and the ammunition counter on the HUD.', keys: 'Space', check: (g) => !!g.player.gun && g.player.gun.fired >= 40 },
+      { text: 'Outstanding flying! Try the Gunnery Range, Canyon Run and Scramble missions next.', wait: 5, final: true },
     ],
   },
 ];

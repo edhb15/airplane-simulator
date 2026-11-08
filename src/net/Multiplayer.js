@@ -63,6 +63,7 @@ class BroadcastTransport {
       return;
     }
     if (msg.t === 'chat') this.emit({ t: 'chat', id: this.id, name: this.info.callsign, text: msg.text, ts: Date.now() });
+    if (msg.t === 'down') this.emit({ t: 'down', id: this.id, by: msg.by, name: this.info.callsign, byName: this.peers.get(msg.by)?.info.callsign || '' });
     if (msg.t === 'info') this.info = { ...this.info, aircraft: msg.aircraft, livery: msg.livery };
     this.post(msg);
   }
@@ -90,6 +91,8 @@ class BroadcastTransport {
     }
     if (m.t === 'state') this.emit({ t: 'state', id: m.from, s: m.s });
     if (m.t === 'chat') this.emit({ t: 'chat', id: m.from, name: m.info.callsign, text: m.text, ts: Date.now() });
+    if (m.t === 'hit' && m.target === this.id) this.emit({ t: 'hit', from: m.from, name: m.info.callsign, dmg: Math.max(0, Math.min(50, Number(m.dmg) || 0)) });
+    if (m.t === 'down') this.emit({ t: 'down', id: m.from, by: m.by, name: m.info.callsign, byName: m.by === this.id ? this.info.callsign : this.peers.get(m.by)?.info.callsign || '' });
   }
   close() {
     this.post({ t: 'bye' });
@@ -164,6 +167,7 @@ export class Multiplayer {
     this.listeners = new Set();
     this.time = 0;
     this.mode = '';
+    this.pendingHits = new Map();
   }
 
   on(fn) {
@@ -395,6 +399,20 @@ export class Multiplayer {
       case 'chat':
         this.emit({ type: 'chat', from: m.name, text: m.text, mine: m.id === this.myId });
         break;
+      case 'hit':
+        if (this.game.player) this.game.player.applyDamage(Number(m.dmg) || 0, m.name || 'another pilot', m.from);
+        break;
+      case 'down': {
+        const victim = m.name || 'A pilot';
+        const shooter = m.byName || 'another pilot';
+        this.emit({ type: 'chat', system: true, text: `✈ ${victim} was shot down by ${shooter}` });
+        if (m.by === this.myId && m.id !== this.myId) {
+          this.game.ui.toast(`Splash! You shot down ${victim}`, 'success', 3500);
+          if (this.game.combat) this.game.combat.kills++;
+          this.game.audio.explosion();
+        }
+        break;
+      }
       case 'error':
         // A full room will not free up by retrying; a restarting server will come back
         if (m.text === 'Room is full') this.manualClose = true;
@@ -435,9 +453,11 @@ export class Multiplayer {
           l: (sw.navLights ? 1 : 0) | (sw.strobeLights ? 2 : 0) | (sw.beacon ? 4 : 0) | (sw.landingLights ? 8 : 0) | (sw.taxiLights ? 16 : 0),
           c: [+fm.controls.elevator.toFixed(2), +fm.controls.aileron.toFixed(2), +fm.controls.rudder.toFixed(2)],
           ias: Math.round(fm.ias / KT),
+          gf: p.gun && p.gun.firing ? 1 : 0,
         },
       });
     }
+    this.flushHits(dt);
     // Interpolate remotes
     const renderT = this.time - DELAY;
     const night = this.game.world.night;
@@ -478,7 +498,72 @@ export class Multiplayer {
       vs.night = night;
       r.visual.update(dt, vs);
       r.last = c;
+      r.lastT = b[b.length - 1].t;
+      this.remoteGunfire(r, b[b.length - 1], dt);
     }
+  }
+
+  // Other pilots' cannon fire: drawn as tracers from their gun, never scores hits here
+  remoteGunfire(r, latest, dt) {
+    const gun = r.spec && r.spec.gun;
+    const combat = this.game.combat;
+    if (!gun || !combat || !latest.gf) {
+      r.gunAccum = 0;
+      return;
+    }
+    r.gunAccum = (r.gunAccum || 0) + dt * gun.rate;
+    const shots = Math.floor(r.gunAccum);
+    r.gunAccum -= shots;
+    const root = r.visual.root;
+    for (let i = 0; i < shots; i++) {
+      _gp.set(...gun.pos).applyQuaternion(root.quaternion).add(root.position);
+      _gd.set((Math.random() - 0.5) * gun.spread, Math.sin((gun.elev || 0) * Math.PI / 180), -1).normalize().applyQuaternion(root.quaternion);
+      _gv.set(latest.v[0], latest.v[1], latest.v[2]).addScaledVector(_gd, gun.muzzle);
+      combat.bullets.fire(_gp, _gv, 1, 0, gun.life || 3.2, (i / Math.max(1, shots)) * dt);
+    }
+  }
+
+  // Remote pilots flying fighters can be shot (aimed at their predicted current
+  // position, since the drawn aircraft is interpolated ~150 ms in the past)
+  combatTargets() {
+    const list = [];
+    for (const r of this.remotes.values()) {
+      if (!r.last || !r.spec || r.spec.category !== 'fighter') continue;
+      if (!r.target) {
+        r.target = {
+          kind: 'player',
+          remote: r,
+          radius: 8,
+          alive: true,
+          get callsign() {
+            return r.info.callsign || r.info.name;
+          },
+          getPosition: (out) => {
+            const ahead = Math.min(0.5, Math.max(0, this.time - (r.lastT || this.time)));
+            return out.set(r.last.p[0] + r.last.v[0] * ahead, r.last.p[1] + r.last.v[1] * ahead, r.last.p[2] + r.last.v[2] * ahead);
+          },
+          getVelocity: (out) => out.set(r.last.v[0], r.last.v[1], r.last.v[2]),
+          onHit: (dmg) => {
+            this.pendingHits.set(r.info.id, (this.pendingHits.get(r.info.id) || 0) + dmg);
+          },
+        };
+      }
+      list.push(r.target);
+    }
+    return list;
+  }
+
+  // Hits are batched and sent at most ten times a second
+  flushHits(dt) {
+    this.hitTimer = (this.hitTimer || 0) - dt;
+    if (this.hitTimer > 0 || !this.pendingHits.size || !this.transport) return;
+    this.hitTimer = 0.1;
+    for (const [id, dmg] of this.pendingHits) this.transport.send({ t: 'hit', target: id, dmg: Math.min(50, Math.round(dmg)) });
+    this.pendingHits.clear();
+  }
+
+  reportDown(byId) {
+    if (this.transport && this.connected) this.transport.send({ t: 'down', by: byId });
   }
 
   get players() {
@@ -499,3 +584,7 @@ export class Multiplayer {
 
 const _qa = new THREE.Quaternion();
 const _qb = new THREE.Quaternion();
+
+const _gp = new THREE.Vector3();
+const _gd = new THREE.Vector3();
+const _gv = new THREE.Vector3();

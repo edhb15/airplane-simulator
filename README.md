@@ -70,8 +70,8 @@ Endpoints: `/ws` (WebSocket), `/health` (status JSON) and `/rooms` (open rooms a
 | Meridian MJ-320 | Commercial | Narrow-body fly-by-wire airliner with envelope protection and autoland |
 | Vireo RJ-900 | Commercial | Regional jet |
 | Meridian MW-350 | Commercial | Long-haul wide-body twinjet |
-| Talon FX-16 | Fighter | Fly-by-wire fighter, afterburner, 9 g limiter, HUD and radar MFD |
-| Tempest EF-2 | Fighter | Canard-delta air superiority fighter |
+| Talon FX-16 | Fighter | Fly-by-wire fighter, afterburner, 9 g limiter, HUD and radar MFD, 20 mm rotary cannon (510 rounds) |
+| Tempest EF-2 | Fighter | Canard-delta air superiority fighter, 27 mm revolver cannon (150 heavier rounds) |
 | Titan T-74F | Cargo | Heavy four-engine freighter |
 | Mule CT-130 | Cargo | Four-turboprop tactical transport |
 
@@ -99,13 +99,20 @@ Four aircraft (one per category) are available from the start; the rest are boug
 ### Game modes
 - **Free Flight** — any owned aircraft, any airport, gate/runway/final approach/in-flight start, time, weather, wind, fuel and payload, optional GPS destination.
 - **Career Mode** — a job board of passenger and cargo flights from your current base, paid by landing quality, passenger comfort and punctuality. Seven pilot ranks, a logbook and statistics.
-- **Missions** — 20 missions in six categories: passenger, cargo, emergency landings (engine failure, fire, glider, gear failure, fuel leak), search & rescue (find and supply drops), long-distance and military (canyon rings, intercept, air show).
+- **Missions** — 21 missions in six categories: passenger, cargo, emergency landings (engine failure, fire, glider, gear failure, fuel leak), search & rescue (find and supply drops), long-distance and military (gunnery range, canyon rings, intercept, air show).
 - **Flight School** — six interactive lessons from basic controls to ILS autoland and fighter handling, plus a pilot handbook.
 - **Multiplayer** — fly with other pilots in shared rooms with chat; other aircraft appear in the world, on the map, the navigation display and TCAS. A *Local* mode links several browser tabs without a server.
 
 ### Air traffic control & traffic
 - AI airliners, business jets, cargo and GA traffic push back, taxi along the taxiway network, take off, fly between airports, fly circuits, land and park at gates.
 - ATC radio menu (Tab) with spoken replies: pushback and taxi with a green taxi-route line, takeoff and landing clearances, ATIS, ILS/visual approach vectors, altitude changes, direct-to, flight following and emergencies.
+
+### Fighter guns & target practice
+- Both fighters carry a cannon. Rounds are simulated individually: launched at muzzle velocity plus the jet's own speed, slowed by drag and pulled down by gravity, and drawn as glowing tracers. Impacts kick up dust on the ground and splashes on water; hits throw sparks.
+- The cockpit HUD gunsight shows where your rounds will be, gravity drop included, with a range arc when a target is on the gun line. In the external views a matching reticle is drawn, and targets within 8 km get boxes with their range.
+- The guns only fire when airborne. Land and stop for a few seconds to rearm.
+- **Target drones:** fly the *Gunnery Range* mission (shoot down five drones, then land at Ironwood) or choose *Spawn target drones* in the pause menu during a free flight in a fighter. Drones also show on the radar and the map.
+- **Multiplayer dogfights:** pilots flying fighters can shoot each other down. Hits are announced to the target, and a shoot-down is announced to the room. Airliners, private and cargo aircraft, and the AI traffic can't be damaged.
 
 ### Cameras
 Cockpit, passenger cabin (window seat looking out at the wing), external chase, wing, cinematic, tower and fly-by.
@@ -134,6 +141,7 @@ All keys can be rebound in *Settings → Key bindings*. Press `` ` `` or F10 in 
 | Brakes (hold) / parking brake | B / K |
 | Speed brakes, arm ground spoilers | / |
 | Thrust reversers | R |
+| Fire cannon (fighters, hold) | Space |
 | Autopilot / autothrottle | Z / X |
 | Engine auto-start | I |
 | Lights: landing / nav / strobe | L / N / O |
@@ -144,7 +152,7 @@ All keys can be rebound in *Settings → Key bindings*. Press `` ` `` or F10 in 
 | Simulation rate | T faster · Y slower |
 | Pause menu | Esc or P |
 
-**Gamepad** (standard mapping): left stick pitch/roll, LT/RT throttle, LB/RB rudder, A brakes, B/X flaps, Y gear, D-pad trim/autopilot/map, right stick look. **Joysticks and HOTAS** are detected automatically; map the pitch, roll, rudder and throttle axes in *Settings → Controls*. **Mouse yoke** flying can be enabled in the same place.
+**Gamepad** (standard mapping): left stick pitch/roll, LT/RT throttle, LB/RB rudder, A brakes on the ground / fire cannon in the air, B/X flaps, Y gear, D-pad trim/autopilot/map, right stick look. **Joysticks and HOTAS** are detected automatically (the trigger brakes on the ground and fires the cannon in the air); map the pitch, roll, rudder and throttle axes in *Settings → Controls*. **Mouse yoke** flying can be enabled in the same place.
 
 ## First flight in an airliner
 
@@ -178,7 +186,7 @@ dev/          model and world viewers for development
 ## Testing
 
 ```bash
-npm test                         # flight model (takeoff, altitude hold, crash, autoland) and the multiplayer server
+npm test                         # flight model, cannon ballistics and the multiplayer server
 node tools/flows.mjs             # in-browser smoke test of all missions, tutorials, career, ATC, crash/debrief, multiplayer
 node tools/e2e.mjs               # menus + a flight with screenshots (needs the dev server and Playwright)
 node tools/views.mjs URL out mj320,k172 cockpit,cabin   # camera view screenshots

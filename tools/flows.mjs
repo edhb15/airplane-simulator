@@ -18,7 +18,8 @@ const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--ena
 const context = await browser.newContext({ viewport: { width: 1024, height: 640 } });
 const page = await context.newPage();
 const errors = [];
-page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+// Refused fetches (e.g. the room list when no relay server runs) are expected noise
+page.on('console', (m) => m.type() === 'error' && !/Failed to load resource|ERR_CONNECTION_REFUSED/.test(m.text()) && errors.push(m.text()));
 page.on('pageerror', (e) => errors.push(`${e.message}\n${(e.stack || '').split('\n').slice(0, 3).join('\n')}`));
 await page.goto(url, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__sim && window.__sim.state === 'menu', null, { timeout: 120000, polling: 500 });
@@ -255,6 +256,50 @@ await run('multiplayer local mode two clients', async () => {
   await p2.close();
   return `${r}; p2 chat: ${chat}`;
 });
+
+await run('fighter guns: fire, shoot down a drone, safe on ground, rearm', () =>
+  page.evaluate(async () => {
+    const g = window.__sim;
+    await g.startFlight({ aircraftId: 'fx16', airport: 'AXIW', spawn: 'air', altitudeFt: 8000, waitForScenery: false });
+    window.__step(0.5);
+    const p = g.player;
+    const fm = p.sim.fm;
+    const out = [];
+    // One drone, then sit 350 m behind it on its flight path and hold the trigger
+    const [d] = g.combat.spawnDrones({ x: fm.position.x, z: fm.position.z - 3000, alt: fm.position.y, count: 1, spread: 0 });
+    let fired = 0;
+    for (let i = 0; i < 90 && d.alive; i++) {
+      const dp = d.group.position;
+      const v = d.vel.clone().normalize();
+      const pos = dp.clone().addScaledVector(v, -350);
+      // aim like a pilot does: nose below the target by the gun's boresight elevation, plus drop
+      const tof = 350 / p.spec.gun.muzzle;
+      const aim = Math.asin(Math.max(-1, Math.min(1, v.y))) - (p.spec.gun.elev * Math.PI) / 180 + (0.5 * 9.81 * tof * tof) / 350;
+      fm.placeInAir(pos.x, pos.y, pos.z, Math.atan2(v.x, -v.z), d.vel.length(), aim);
+      g.input.down.add('Space');
+      window.__step(1 / 30);
+      fired = p.gun.fired;
+    }
+    g.input.down.delete('Space');
+    window.__step(0.2);
+    out.push(`fired ${fired}, ammo ${p.gun.ammo}/${p.spec.gun.rounds}, hits ${g.combat.bullets.hits}, kills ${g.combat.kills}, drone ${d.alive ? 'alive' : 'down'}`);
+    out.push(`HUD gun ${JSON.stringify({ armed: p.flightData.gun.armed, ammo: p.flightData.gun.ammo })}, radar targets ${g.trafficFor(fm.position).filter((t) => t.target).length}`);
+    const kills = g.combat.kills;
+    window.__step(4); // wreck falls
+    // On the ground: safe, then rearm after stopping
+    await g.startFlight({ aircraftId: 'fx16', airport: 'AXIW', spawn: 'runway', waitForScenery: false });
+    const q = g.player;
+    q.gun.ammo = 10;
+    g.input.down.add('Space');
+    window.__step(0.5);
+    g.input.down.delete('Space');
+    const safe = q.gun.ammo === 10 && !q.gun.armed;
+    window.__step(5);
+    out.push(`ground: ${safe ? 'safe' : 'FIRED ON GROUND'}, after stop ammo ${q.gun.ammo}`);
+    if (kills < 1 || !safe || q.gun.ammo !== q.spec.gun.rounds) throw new Error(out.join('; '));
+    return out.join('; ');
+  })
+);
 
 console.log('\n==== summary ====');
 console.log(report.filter((l) => l.startsWith('FAIL')).length + ' failures of ' + report.filter((l) => /^(ok|FAIL)/.test(l)).length);

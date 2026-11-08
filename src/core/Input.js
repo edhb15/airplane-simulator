@@ -1,7 +1,7 @@
 // Unified input: keyboard (rebindable), mouse (yoke mode, look, wheel),
 // gamepads (standard mapping) and joysticks / HOTAS (raw axes).
 
-const CONTINUOUS = new Set(['pitchDown', 'pitchUp', 'rollLeft', 'rollRight', 'yawLeft', 'yawRight', 'throttleUp', 'throttleDown', 'brakes', 'trimUp', 'trimDown', 'lookBack', 'lookLeft', 'lookRight']);
+const CONTINUOUS = new Set(['pitchDown', 'pitchUp', 'rollLeft', 'rollRight', 'yawLeft', 'yawRight', 'throttleUp', 'throttleDown', 'brakes', 'trimUp', 'trimDown', 'lookBack', 'lookLeft', 'lookRight', 'fireGun']);
 
 function approach(cur, target, rate, dt) {
   const d = target - cur;
@@ -23,7 +23,7 @@ export class Input {
     this.down = new Set();
     this.events = [];
     this.context = 'menu'; // menu | flight | text
-    this.axes = { pitch: 0, roll: 0, yaw: 0, tiller: 0, brake: 0, brakeL: 0, brakeR: 0, throttleRate: 0, throttleAbs: null, trim: 0, lookX: 0, lookY: 0 };
+    this.axes = { pitch: 0, roll: 0, yaw: 0, tiller: 0, brake: 0, brakeL: 0, brakeR: 0, throttleRate: 0, throttleAbs: null, trim: 0, lookX: 0, lookY: 0, trigger: 0 };
     this.kb = { pitch: 0, roll: 0, yaw: 0 };
     this.mouse = { x: 0, y: 0, nx: 0, ny: 0, inside: false, buttons: 0, dx: 0, dy: 0, wheel: 0, overUI: false };
     this.mouseYoke = false;
@@ -182,6 +182,8 @@ export class Input {
     if (flight && this.isDown('throttleUp')) throttleRate += 0.45;
     if (flight && this.isDown('throttleDown')) throttleRate -= 0.45;
     let brake = flight && this.isDown('brakes') ? 1 : 0;
+    // Gun trigger; gamepad A / joystick trigger double as wheel brakes on the ground
+    let trigger = flight && this.isDown('fireGun') ? 1 : 0;
     let trim = 0;
     if (flight && this.isDown('trimUp')) trim += 1;
     if (flight && this.isDown('trimDown')) trim -= 1;
@@ -227,7 +229,7 @@ export class Input {
         throttleRate += (rt - lt) * 0.6;
         if (found.buttons[4] && found.buttons[4].pressed) yaw = -1;
         if (found.buttons[5] && found.buttons[5].pressed) yaw = 1;
-        if (found.buttons[0] && found.buttons[0].pressed) brake = 1;
+        if (found.buttons[0] && found.buttons[0].pressed) brake = trigger = 1;
         lookX += applyDeadzone(found.axes[2] || 0, dz);
         lookY += applyDeadzone(found.axes[3] || 0, dz);
         if (flight) {
@@ -259,7 +261,7 @@ export class Input {
             ax.throttleAbs = Math.max(0, Math.min(1, t));
           }
         }
-        if (found.buttons[0] && found.buttons[0].pressed) brake = 1;
+        if (found.buttons[0] && found.buttons[0].pressed) brake = trigger = 1;
         if (flight) {
           if (press(1)) this.events.push('autopilot');
           if (press(2)) this.events.push('flapsDown');
@@ -286,6 +288,7 @@ export class Input {
     ax.yaw = Math.max(-1, Math.min(1, yaw));
     ax.throttleRate = flight ? throttleRate : 0;
     ax.brake = brake;
+    ax.trigger = flight ? trigger : 0;
     ax.trim = trim;
     ax.lookX = lookX;
     ax.lookY = lookY;

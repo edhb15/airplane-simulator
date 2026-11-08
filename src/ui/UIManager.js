@@ -256,6 +256,12 @@ export class UIManager {
         this.toggleMap();
       }),
       ms.kind === 'free' ? button('☁  Weather & time', () => this.conditionsPanel()) : null,
+      ms.kind === 'free' && g.player && g.player.gun
+        ? button('🎯  Spawn target drones', () => {
+            this.closeModal();
+            g.combat.spawnPracticeDrones(5);
+          })
+        : null,
       button('⚙  Settings', () => this.openSettings()),
       button('⌨  Controls', () => this.toggleHelp()),
       button('↻  Restart flight', () => {

@@ -38,7 +38,7 @@ const fragment = /* glsl */ `
   }
 `;
 
-class ParticleSystem {
+export class ParticleSystem {
   constructor(scene, additive = false) {
     this.pos = new Float32Array(MAX * 3);
     this.vel = new Float32Array(MAX * 3);
@@ -204,6 +204,11 @@ export class AircraftEffects {
         this.smoke.emit(_p, _v.copy(fm.velocity).multiplyScalar(0.3), { life: 6, size0: 2, size1: 18, alpha: 0.5, color: e.fire ? [0.15, 0.15, 0.15] : [0.4, 0.4, 0.4], drag: 0.4, rise: 1 });
         if (e.fire) this.fire.emit(_p, _v.copy(fm.velocity).multiplyScalar(0.5), { life: 0.4, size0: 2, size1: 6, alpha: 0.9, color: [1, 0.5, 0.1], drag: 2 });
       }
+    }
+    // Battle damage: trailing smoke once badly hit
+    if ((p.damage || 0) >= 50 && !fm.crashed && Math.random() < 0.7) {
+      _p.set(0, 0.2, spec.model.fuselage.tailZ * 0.3).applyQuaternion(fm.quaternion).add(fm.position);
+      this.smoke.emit(_p, _v.copy(fm.velocity).multiplyScalar(0.2), { life: 7, size0: 1.5, size1: 14, alpha: 0.45, color: [0.18, 0.18, 0.18], drag: 0.5, rise: 0.8 });
     }
     // Display smoke (aerobatics) when toggled
     if (this.smokeOn && !fm.wow) {

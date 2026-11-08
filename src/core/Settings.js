@@ -46,7 +46,8 @@ export const DEFAULT_BINDINGS = {
   lookBack: ['Numpad2'],
   lookLeft: ['Numpad4'],
   lookRight: ['Numpad6'],
-  lookCenter: ['Numpad5', 'Space'],
+  lookCenter: ['Numpad5'],
+  fireGun: ['Space'],
   map: ['KeyM'],
   hud: ['KeyH'],
   atc: ['Tab'],
@@ -105,6 +106,13 @@ export class Settings extends EventBus {
     this.data = deepMerge(DEFAULTS, load('skyward.settings', {}));
     // ensure all bindings exist (new actions after upgrades)
     this.data.controls.bindings = { ...DEFAULT_BINDINGS, ...this.data.controls.bindings };
+    // v2: Space moved from "centre view" to "fire guns"
+    if ((this.data.bindingsVersion || 1) < 2) {
+      const b = this.data.controls.bindings;
+      b.lookCenter = (b.lookCenter || []).filter((k) => k !== 'Space');
+      if (!b.fireGun.includes('Space')) b.fireGun = [...b.fireGun, 'Space'];
+      this.data.bindingsVersion = 2;
+    }
   }
   get(section) {
     return this.data[section];
@@ -124,6 +132,7 @@ export class Settings extends EventBus {
   }
   resetBindings() {
     this.data.controls.bindings = JSON.parse(JSON.stringify(DEFAULT_BINDINGS));
+    this.data.bindingsVersion = 2;
     this.persist();
     this.emit('change', { section: 'controls', key: 'bindings' });
   }

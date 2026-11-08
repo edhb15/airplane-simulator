@@ -1221,6 +1221,35 @@ export function drawFighterHUD(ctx, w, h, d, opts = {}) {
   if (d.ap && d.ap.engaged) text(ctx, `AP ${d.ap.lat}/${d.ap.vert}`, cx, h - 40 * s, col, 15 * s, 'center');
   if (d.guidance && d.guidance.valid && d.guidance.wpt) text(ctx, `${d.guidance.wpt.id} ${(d.guidance.distance / 1852).toFixed(1)}`, cx + 175 * s, h - 40 * s, col, 14 * s, 'center');
   if (d.warningText) text(ctx, d.warningText, cx, cy + 120 * s, 'rgba(255,90,60,0.95)', 22 * s, 'center', 'middle', 800);
+  // Gunsight: pipper where the rounds will be at the gun range (gravity drop
+  // included), range arc when a target is near the gun line, ammunition
+  const gun = d.gun;
+  if (gun) {
+    if (gun.armed) {
+      const gx = cx + Math.max(-12, Math.min(12, gun.pipX)) * ppd;
+      const gy = cy + Math.max(-12, Math.min(12, gun.pipY)) * ppd;
+      const r = 26 * s;
+      ctx.lineWidth = 2 * s;
+      ctx.beginPath();
+      ctx.arc(gx, gy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(gx, gy, 2.6 * s, 0, Math.PI * 2);
+      ctx.fill();
+      if (gun.range) {
+        // range arc: full circle = 2,000 m
+        ctx.lineWidth = 4 * s;
+        ctx.beginPath();
+        ctx.arc(gx, gy, r - 6 * s, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, gun.range / 2000));
+        ctx.stroke();
+        text(ctx, `${(gun.range / 1852).toFixed(1)}`, gx + r + 8 * s, gy, col, 14 * s, 'left');
+        ctx.lineWidth = 2 * s;
+      }
+    }
+    text(ctx, `GUN ${gun.ammo}`, cx - 170 * s, h - 82 * s, gun.ammo ? col : 'rgba(255,90,60,0.95)', 15 * s, 'center');
+    text(ctx, gun.armed ? (gun.firing ? 'FIRE' : 'ARM') : 'SAFE', cx - 170 * s, h - 102 * s, col, 15 * s, 'center', 'middle', 700);
+  }
+  if (d.damage > 0) text(ctx, `DMG ${Math.round(d.damage)}%`, cx + 175 * s, h - 82 * s, 'rgba(255,90,60,0.95)', 15 * s, 'center', 'middle', 700);
   ctx.restore();
 }
 

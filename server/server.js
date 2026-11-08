@@ -68,6 +68,7 @@ export function sanitizeState(s) {
     l: (num(s.l) ?? 0) & 0xff,
     c: list(s.c, 3),
     ias: num(s.ias) ?? 0,
+    gf: s.gf ? 1 : 0, // cannon firing (drawn as tracers by the other pilots)
   };
 }
 
@@ -180,7 +181,7 @@ export function createRelayServer(opts = {}) {
 
   wss.on('connection', (ws, req, ip) => {
     ipCounts.set(ip, (ipCounts.get(ip) || 0) + 1);
-    const client = { id: nextId++, ws, ip, room: null, name: 'Pilot', callsign: '', aircraft: 'k172', livery: '', alive: true, stateCount: 0, chatCount: 0, window: Date.now() };
+    const client = { id: nextId++, ws, ip, room: null, name: 'Pilot', callsign: '', aircraft: 'k172', livery: '', alive: true, stateCount: 0, chatCount: 0, hitCount: 0, window: Date.now() };
     clientOf.set(ws, client);
     ws.on('pong', () => (client.alive = true));
     ws.on('message', (raw) => {
@@ -196,6 +197,7 @@ export function createRelayServer(opts = {}) {
         client.window = now;
         client.stateCount = 0;
         client.chatCount = 0;
+        client.hitCount = 0;
       }
       switch (msg.t) {
         case 'hello': {
@@ -237,6 +239,23 @@ export function createRelayServer(opts = {}) {
           const text = clean(msg.text, 240);
           if (!text) return;
           broadcast(client.room, { t: 'chat', id: client.id, name: client.callsign || client.name, text, ts: now });
+          break;
+        }
+        case 'hit': {
+          // Cannon hits are scored by the shooter and delivered to the target only
+          if (!client.room || ++client.hitCount > 20) return;
+          const target = rooms.get(client.room)?.get(Number(msg.target));
+          if (!target || target === client) return;
+          const dmg = Math.max(0, Math.min(50, Number(msg.dmg) || 0));
+          if (dmg > 0) send(target.ws, { t: 'hit', from: client.id, name: client.callsign || client.name, dmg });
+          break;
+        }
+        case 'down': {
+          // A pilot reports being shot down; everyone in the room hears about it
+          if (!client.room || client.downAt > now - 5000) return;
+          client.downAt = now;
+          const shooter = rooms.get(client.room)?.get(Number(msg.by));
+          broadcast(client.room, { t: 'down', id: client.id, name: client.callsign || client.name, by: shooter ? shooter.id : 0, byName: shooter ? shooter.callsign || shooter.name : '' });
           break;
         }
         case 'ping':

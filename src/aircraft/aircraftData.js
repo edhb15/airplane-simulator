@@ -384,6 +384,8 @@ export const AIRCRAFT = [
     autopilot: { athr: true, app: true, autoland: false },
     speeds: { vs: 125, vr: 150, vref: 150, vfe: 300, vmo: 800, mmo: 2.0, cruise: 480, cruiseAlt: 30000, ceiling: 50000 },
     rangeNm: 2000,
+    // 20 mm six-barrel rotary cannon above the left wing root (100 rounds/s)
+    gun: { name: '20 mm rotary cannon', rounds: 510, rate: 100, muzzle: 1050, damage: 34, spread: 0.004, elev: 1.0, pos: [-0.62, 0.22, -4.2] },
     eye: [0, 0.78, -5.3],
     cabinEye: [0, 0.85, -4.4],
     model: {
@@ -438,6 +440,8 @@ export const AIRCRAFT = [
     autopilot: { athr: true, app: true, autoland: false },
     speeds: { vs: 120, vr: 145, vref: 145, vfe: 300, vmo: 800, mmo: 2.0, cruise: 520, cruiseAlt: 35000, ceiling: 55000 },
     rangeNm: 1800,
+    // 27 mm revolver cannon in the right wing root (28 rounds/s, heavier shells)
+    gun: { name: '27 mm revolver cannon', rounds: 150, rate: 28, muzzle: 1025, damage: 60, spread: 0.003, elev: 1.0, pos: [0.78, -0.22, -2.6] },
     eye: [0, 0.9, -6.1],
     cabinEye: [0, 0.95, -5.2],
     model: {

@@ -119,9 +119,52 @@ describe('relay server', () => {
   });
 });
 
+describe('dogfight messages', () => {
+  let relay, port;
+  beforeAll(async () => {
+    relay = createRelayServer({ allowedOrigins: [], log: () => {} });
+    port = await relay.listen(0, '127.0.0.1');
+  });
+  afterAll(() => relay.close());
+
+  it('delivers hits only to the target, clamps damage and announces shoot-downs', async () => {
+    const a = await connect(port);
+    const b = await connect(port);
+    const c = await connect(port);
+    const other = await connect(port);
+    hello(a, 'arena', 'VIPER');
+    hello(b, 'arena', 'EAGLE');
+    hello(c, 'arena', 'HAWK');
+    hello(other, 'elsewhere', 'GHOST');
+    for (const x of [a, b, c, other]) await until(() => x.msgs.some((m) => m.t === 'welcome'));
+    const id = (x) => x.msgs.find((m) => m.t === 'welcome').id;
+
+    a.ws.send(JSON.stringify({ t: 'hit', target: id(b), dmg: 500 }));
+    a.ws.send(JSON.stringify({ t: 'hit', target: id(other), dmg: 30 })); // different room: dropped
+    a.ws.send(JSON.stringify({ t: 'hit', target: id(a), dmg: 30 })); // self: dropped
+    expect(await until(() => b.msgs.some((m) => m.t === 'hit'))).toBe(true);
+    expect(b.msgs.find((m) => m.t === 'hit')).toMatchObject({ from: id(a), name: 'VIPER', dmg: 50 });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(c.msgs.some((m) => m.t === 'hit')).toBe(false);
+    expect(other.msgs.some((m) => m.t === 'hit')).toBe(false);
+    expect(a.msgs.some((m) => m.t === 'hit')).toBe(false);
+
+    b.ws.send(JSON.stringify({ t: 'down', by: id(a) }));
+    for (const x of [a, b, c]) expect(await until(() => x.msgs.some((m) => m.t === 'down'))).toBe(true);
+    expect(c.msgs.find((m) => m.t === 'down')).toMatchObject({ id: id(b), name: 'EAGLE', by: id(a), byName: 'VIPER' });
+    expect(other.msgs.some((m) => m.t === 'down')).toBe(false);
+
+    // gunfire flag survives state sanitising
+    a.ws.send(JSON.stringify({ t: 'state', s: { ...pose, gf: 1 } }));
+    expect(await until(() => c.msgs.some((m) => m.t === 'state' && m.s.gf === 1))).toBe(true);
+    for (const x of [a, b, c, other]) x.ws.close();
+    await until(() => relay.wss.clients.size === 0);
+  });
+});
+
 describe('message sanitising', () => {
   it('keeps only known state fields with finite numbers', () => {
-    expect(sanitizeState({ ...pose, l: 999, e: [1, 2, 'x'], hack: 1 })).toEqual({ ...pose, l: 999 & 0xff, e: [1, 2, 0] });
+    expect(sanitizeState({ ...pose, l: 999, e: [1, 2, 'x'], hack: 1 })).toEqual({ ...pose, l: 999 & 0xff, e: [1, 2, 0], gf: 0 });
     expect(sanitizeState({ p: [1, 2, 3], q: [0, 0, 0, 1], v: [0, Infinity, 0] })).toBeNull();
     expect(sanitizeState(null)).toBeNull();
   });
