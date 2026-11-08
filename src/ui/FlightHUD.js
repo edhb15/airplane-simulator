@@ -546,6 +546,7 @@ export class FlightHUD {
     chip('', fmtTime(g.world.time));
     chip('CAM', (CAMERA_LABELS[g.cameras.mode] || '').toUpperCase());
     if (g.multiplayer.connected) chip('MP', `${g.multiplayer.players.length + 1}`);
+    else if (g.multiplayer.reconnecting) chip('MP', 'reconnecting…');
     this.renderRadio();
 
     // Objective

@@ -9,6 +9,7 @@ import { AIRPORT_INFO, getAirport } from '../world/airportGeometry.js';
 import { WEATHER_PRESETS, Weather } from '../world/Weather.js';
 import { MISSIONS, MISSION_CATEGORIES, TUTORIALS } from '../missions/missions.js';
 import { generateJobs, jobToMission } from '../missions/Career.js';
+import { normalizeServerUrl } from '../net/Multiplayer.js';
 import { RANKS } from '../core/Profile.js';
 import { GRAPHICS_PRESETS, DEFAULT_BINDINGS } from '../core/Settings.js';
 import { fmtTime, fmtMoney, fmtDuration, fmtMass, escapeHtml } from '../core/format.js';
@@ -1188,22 +1189,50 @@ export class MenuScreens {
     const right = el('div.panel.interactive.col', { style: { flex: '1', padding: '18px 22px', minWidth: '0' } });
     body.appendChild(left);
     body.appendChild(right);
-    const cfg = (this.mpCfg = this.mpCfg || { mode: mp.staticHost ? 'local' : 'server', url: mp.defaultUrl(), room: 'public' });
+    const cfg = (this.mpCfg = this.mpCfg || { mode: mp.defaultUrl() ? 'server' : 'local', url: mp.defaultUrl(), room: 'public' });
     const status = el('div.muted', { style: { marginTop: '10px', fontSize: '13px' } }, mp.connected ? `Connected — room “${mp.room}”` : 'Not connected');
-    const nameIn = el('input', { type: 'text', maxLength: 24 });
+    const nameIn = el('input', { type: 'text', name: 'pilot-name', maxLength: 24 });
     nameIn.value = p.data.name;
-    const csIn = el('input', { type: 'text', maxLength: 10 });
+    const csIn = el('input', { type: 'text', name: 'callsign', maxLength: 10 });
     csIn.value = p.data.callsign;
-    const urlIn = el('input', { type: 'text' });
+    const urlIn = el('input', { type: 'text', name: 'server', spellcheck: false });
     urlIn.value = cfg.url;
-    const roomIn = el('input', { type: 'text', maxLength: 24 });
+    const roomIn = el('input', { type: 'text', name: 'room', maxLength: 24 });
     roomIn.value = cfg.room;
     left.appendChild(el('div.section-title', null, 'Pilot'));
     left.appendChild(row('Name', nameIn));
     left.appendChild(row('Callsign', csIn));
     left.appendChild(el('div.section-title', null, 'Session'));
-    urlIn.placeholder = 'wss://your-server.example.com/ws';
-    const urlRow = row('Server address', urlIn, mp.staticHost ? 'This site is static — enter the address of a relay server started with “npm run server”' : 'Run “npm run server” to host');
+    urlIn.placeholder = 'wss://your-server.onrender.com/ws';
+    const urlRow = row('Server address', urlIn, mp.staticHost ? 'The multiplayer server you deployed (see the README), e.g. your-server.onrender.com' : 'Run “npm run server” to host one');
+    // Rooms open on the server
+    const roomsBox = el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' } });
+    const roomsRow = row('Open rooms', roomsBox, 'Click a room to join it');
+    const loadRooms = async () => {
+      clear(roomsBox);
+      let url;
+      try {
+        url = normalizeServerUrl(urlIn.value);
+      } catch {
+        url = '';
+      }
+      if (!url) {
+        roomsBox.appendChild(el('span.muted', { style: { fontSize: '13px' } }, 'Enter a server address'));
+        return;
+      }
+      roomsBox.appendChild(el('span.muted', { style: { fontSize: '13px' } }, 'Checking…'));
+      try {
+        const list = await mp.listRooms(url);
+        clear(roomsBox);
+        if (!list.length) roomsBox.appendChild(el('span.muted', { style: { fontSize: '13px' } }, 'No one is flying — start a room'));
+        for (const r of list.sort((a, b) => b.players - a.players))
+          roomsBox.appendChild(button(`${r.name} · ${r.players} pilot${r.players === 1 ? '' : 's'}`, () => (roomIn.value = r.name), 'small'));
+      } catch {
+        clear(roomsBox);
+        roomsBox.appendChild(el('span.muted', { style: { fontSize: '13px' } }, 'Server asleep or unreachable — it wakes up when you connect'));
+      }
+      roomsBox.appendChild(button('↻', loadRooms, 'small ghost'));
+    };
     left.appendChild(
       row(
         'Connection',
@@ -1216,35 +1245,52 @@ export class MenuScreens {
           (v) => {
             cfg.mode = v;
             urlRow.classList.toggle('hidden', v === 'local');
+            roomsRow.classList.toggle('hidden', v === 'local');
+            if (v === 'server') loadRooms();
           }
         )
       )
     );
     urlRow.classList.toggle('hidden', cfg.mode === 'local');
+    roomsRow.classList.toggle('hidden', cfg.mode === 'local');
+    urlIn.addEventListener('change', loadRooms);
     left.appendChild(urlRow);
     left.appendChild(row('Room', roomIn, 'Pilots in the same room see each other'));
+    left.appendChild(roomsRow);
+    if (cfg.mode === 'server' && !mp.connected) loadRooms();
     const connectBtn = button(mp.connected ? 'Disconnect' : 'Connect', async () => {
       if (mp.connected) {
         mp.disconnect();
         this.ui.showScreen('multiplayer');
         return;
       }
-      cfg.url = urlIn.value.trim();
-      if (cfg.mode === 'server' && !cfg.url) {
-        status.textContent = 'Enter a relay server address (wss://…/ws) or use Local mode.';
-        return;
+      if (cfg.mode === 'server') {
+        try {
+          cfg.url = normalizeServerUrl(urlIn.value);
+        } catch {
+          cfg.url = '';
+        }
+        if (!cfg.url) {
+          status.textContent = 'Enter the multiplayer server address (e.g. your-server.onrender.com) or use Local mode.';
+          return;
+        }
+        urlIn.value = cfg.url;
       }
       cfg.room = roomIn.value.trim() || 'public';
       p.data.name = nameIn.value.trim() || p.data.name;
       p.data.callsign = csIn.value.trim().toUpperCase() || p.data.callsign;
       p.persist();
       status.textContent = 'Connecting…';
+      connectBtn.disabled = true;
       try {
         const spec = g.showcaseSpec || getAircraft('mj320');
+        if (cfg.mode === 'server') await mp.wakeServer(cfg.url, (t) => (status.textContent = t));
         await mp.connect({ url: cfg.mode === 'local' ? 'local' : cfg.url, room: cfg.room, name: p.data.name, callsign: p.data.callsign, aircraft: spec.id, livery: p.liveryFor(spec.id) });
+        if (cfg.mode === 'server') mp.rememberServer(cfg.url);
         this.ui.showScreen('multiplayer');
       } catch (e) {
-        status.textContent = `Connection failed: ${e && e.message ? e.message : 'server unreachable'}. Start the server with “npm run server” or use Local mode.`;
+        connectBtn.disabled = false;
+        status.textContent = `Connection failed: ${e && e.message ? e.message : 'server unreachable'}. Check the server address, or use Local mode.`;
       }
     }, mp.connected ? 'danger' : 'primary');
     left.appendChild(el('div', { style: { display: 'flex', gap: '10px', marginTop: '16px' } }, connectBtn, button('Choose aircraft & fly', () => this.ui.showScreen('freeflight'), mp.connected ? 'primary' : '')));
@@ -1254,7 +1300,7 @@ export class MenuScreens {
       el(
         'p.muted',
         { style: { fontSize: '13px', lineHeight: '1.55' } },
-        'Online: everyone connects to the same relay server (included — “npm run server”, default port 8080) and joins the same room. Local: open the simulator in several browser tabs on this computer to test formation flying. In flight press Enter to chat; other pilots appear on your map, navigation display and TCAS.'
+        'Online: everyone connects to the same multiplayer server and joins the same room — share a link with ?server=<address> so friends land on the right server. A free hosted server falls asleep when nobody is flying and takes up to a minute to wake. Local: open the simulator in several browser tabs on this computer. In flight press Enter to chat; other pilots appear in the world, on your map, navigation display and TCAS.'
       )
     );
 

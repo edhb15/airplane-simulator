@@ -30,7 +30,35 @@ The game must be served from the Vite build (`dist/`), not from the source files
 2. Push to `main` (or run the *Deploy to GitHub Pages* workflow manually from the Actions tab).
 3. The site is published at `https://<user>.github.io/<repo>/`.
 
-GitHub Pages only hosts static files, so on Pages the Multiplayer screen starts in *Local (browser tabs)* mode. To fly online, host `npm run server` somewhere reachable and enter its `wss://…/ws` address.
+GitHub Pages only hosts static files, so online multiplayer needs the server below running somewhere else.
+
+### Multiplayer server
+
+`server/server.js` is a small WebSocket relay: pilots in the same room see each other's aircraft and chat. It has no database and needs no configuration, so any Node.js host works. The game finds it through the `MP_SERVER_URL` repository variable (baked into the Pages build), a `?server=` link, or the address a player types in the Multiplayer screen.
+
+**Deploy it for free on Render** (recommended; the free tier supports WebSockets):
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/edhb15/airplane-simulator)
+
+1. Click the button, sign in to Render with GitHub and press **Apply**. The settings come from [`render.yaml`](render.yaml): a free web service named `skyward-multiplayer` that runs `node server/server.js` from `main`.
+2. When it is live, open its URL (for example `https://skyward-multiplayer.onrender.com`). You should see “Multiplayer server is online”.
+3. In GitHub go to **Settings → Secrets and variables → Actions → Variables** and add `MP_SERVER_URL` = `wss://skyward-multiplayer.onrender.com/ws` (use your service's address).
+4. Re-run the **Deploy to GitHub Pages** workflow (Actions tab → *Run workflow*). The site now connects to your server by default.
+
+Free Render services go to sleep after a while without players. The first pilot to connect waits up to about a minute while it wakes; the game shows “Waking up the server…” meanwhile. Players can also share links such as `https://edhb15.github.io/airplane-simulator/?server=skyward-multiplayer.onrender.com` to point friends at a server.
+
+**Other hosts:** the [`Dockerfile`](Dockerfile) runs the server on Fly.io, Railway, Koyeb, a VPS or any Docker host (`docker build -t skyward-mp . && docker run -p 8080:8080 skyward-mp`). Without Docker: `npm ci --omit=dev && node server/server.js`.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | 8080 | Listening port (most hosts set it) |
+| `ALLOWED_ORIGINS` | any | Comma-separated pages allowed to connect, e.g. `https://edhb15.github.io` |
+| `TRUST_PROXY` | off | `1` behind a hosting proxy so per-address limits use the real client address |
+| `MAX_CLIENTS` | 256 | Total connections |
+| `MAX_CONNECTIONS_PER_IP` | 8 | Connections from one address |
+| `MAX_PLAYERS_PER_ROOM` | 32 | Pilots per room |
+
+Endpoints: `/ws` (WebSocket), `/health` (status JSON) and `/rooms` (open rooms and player counts, used by the room list in the game). If a `dist/` build is present the server also serves the game itself.
 
 ## Features
 
@@ -150,7 +178,7 @@ dev/          model and world viewers for development
 ## Testing
 
 ```bash
-npm test                         # flight model: takeoff for every aircraft, altitude hold, crash detection, autoland
+npm test                         # flight model (takeoff, altitude hold, crash, autoland) and the multiplayer server
 node tools/flows.mjs             # in-browser smoke test of all missions, tutorials, career, ATC, crash/debrief, multiplayer
 node tools/e2e.mjs               # menus + a flight with screenshots (needs the dev server and Playwright)
 node tools/views.mjs URL out mj320,k172 cockpit,cabin   # camera view screenshots

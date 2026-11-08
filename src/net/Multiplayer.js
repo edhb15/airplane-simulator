@@ -9,6 +9,27 @@ import { FT, KT } from '../physics/atmosphere.js';
 
 const SEND_HZ = 10;
 const DELAY = 0.15;
+const RECONNECT_DELAYS = [1, 2, 4, 8, 15, 30]; // seconds
+const SAVED_SERVER_KEY = 'skyward.mpServer';
+
+// Accepts "wss://host/ws", "https://host", "host:8080" ... and returns a WebSocket URL
+export function normalizeServerUrl(input) {
+  let s = String(input || '').trim();
+  if (!s || s === 'local') return s;
+  if (/^https?:\/\//i.test(s)) s = s.replace(/^http/i, 'ws');
+  if (!/^wss?:\/\//i.test(s)) s = (/^(localhost|127\.|\[::1\])/i.test(s) ? 'ws://' : 'wss://') + s;
+  const u = new URL(s);
+  if (u.pathname === '' || u.pathname === '/') u.pathname = '/ws';
+  return u.toString().replace(/\/$/, '');
+}
+
+// HTTP base URL of the server behind a WebSocket URL (for /health and /rooms)
+export function serverHttpBase(wsUrl) {
+  const u = new URL(normalizeServerUrl(wsUrl));
+  u.protocol = u.protocol === 'wss:' ? 'https:' : 'http:';
+  u.pathname = u.pathname.replace(/\/ws$/, '') || '/';
+  return u.toString().replace(/\/$/, '');
+}
 
 class BroadcastTransport {
   constructor(room) {
@@ -159,15 +180,83 @@ export class Multiplayer {
     return /\.github\.io$/i.test(window.location.hostname);
   }
 
+  // Server address, in order of preference: ?server= in the page URL, the
+  // address baked in at build time (VITE_MP_SERVER), the last server used, then
+  // the page's own host (the relay can serve the game itself)
   defaultUrl() {
     const loc = window.location;
+    const pick = (v) => {
+      try {
+        return v ? normalizeServerUrl(v) : '';
+      } catch {
+        return '';
+      }
+    };
+    const param = pick(new URLSearchParams(loc.search).get('server'));
+    if (param) return param;
+    const built = pick(import.meta.env.VITE_MP_SERVER);
+    if (built) return built;
+    let saved = '';
+    try {
+      saved = pick(localStorage.getItem(SAVED_SERVER_KEY));
+    } catch {
+      /* storage unavailable */
+    }
+    if (saved) return saved;
     if (this.staticHost) return '';
     if (loc.port === '5173' || loc.port === '4173') return `ws://${loc.hostname}:8080/ws`;
     return `${loc.protocol === 'https:' ? 'wss' : 'ws'}://${loc.host}/ws`;
   }
 
-  async connect({ url, room, name, callsign, aircraft, livery }) {
+  rememberServer(url) {
+    try {
+      localStorage.setItem(SAVED_SERVER_KEY, url);
+    } catch {
+      /* storage unavailable */
+    }
+  }
+
+  // Free hosting tiers put idle servers to sleep: poll /health until it answers
+  async wakeServer(url, onStatus = () => {}, timeoutSec = 90) {
+    const base = serverHttpBase(url);
+    const t0 = performance.now();
+    for (let i = 0; ; i++) {
+      try {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 8000);
+        const r = await fetch(`${base}/health`, { cache: 'no-store', signal: ctl.signal });
+        clearTimeout(timer);
+        if (r.ok) return true;
+      } catch {
+        /* not up yet */
+      }
+      const sec = Math.round((performance.now() - t0) / 1000);
+      if (sec > timeoutSec) throw new Error('the server did not respond');
+      onStatus(i === 0 ? 'Contacting the server…' : `Waking up the server… ${sec}s (a sleeping free server takes up to a minute)`);
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+  }
+
+  // Rooms currently open on a server: [{ name, players }]
+  async listRooms(url) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 6000);
+    try {
+      const r = await fetch(`${serverHttpBase(url)}/rooms`, { cache: 'no-store', signal: ctl.signal });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return await r.json();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async connect(args) {
+    const { url, room, name, callsign, aircraft, livery, reconnect = false } = args;
+    const attempts = this.reconnectAttempts || 0;
     this.disconnect();
+    if (reconnect) this.reconnectAttempts = attempts;
+    this.manualClose = false;
+    this.lastArgs = { ...args, reconnect: false };
     this.room = room || 'public';
     this.hello = { t: 'hello', name, callsign, aircraft, livery: typeof livery === 'string' ? livery : livery?.id || '', room: this.room };
     if (url === 'local') {
@@ -175,22 +264,52 @@ export class Multiplayer {
       this.transport = new BroadcastTransport(this.room);
     } else {
       this.mode = 'server';
-      const t = new SocketTransport(url || this.defaultUrl());
+      const t = new SocketTransport(normalizeServerUrl(url || this.defaultUrl()));
       this.transport = t;
       await t.ready;
       t.onclose = () => {
-        if (this.connected) this.emit({ type: 'status', text: 'Disconnected from server' });
+        const was = this.connected;
         this.connected = false;
         this.clearRemotes();
+        if (this.manualClose || this.transport !== t) return;
+        if (was) this.emit({ type: 'status', text: 'Connection to the server lost — reconnecting…' });
+        this.scheduleReconnect();
       };
     }
     this.transport.onmessage = (m) => this.receive(m);
     this.transport.send(this.hello);
     this.connected = true;
-    this.emit({ type: 'status', text: `Connected to room "${this.room}" (${this.mode === 'local' ? 'local tabs' : 'server'})` });
+    this.emit({ type: 'status', text: reconnect ? 'Reconnected to the multiplayer server' : `Connected to room "${this.room}" (${this.mode === 'local' ? 'local tabs' : 'server'})` });
+    this.reconnectAttempts = 0;
+  }
+
+  // Retry with back-off after the server connection drops (server restart, network blip)
+  scheduleReconnect() {
+    clearTimeout(this.reconnectTimer);
+    if ((this.reconnectAttempts || 0) >= RECONNECT_DELAYS.length) {
+      this.reconnectAttempts = 0;
+      this.emit({ type: 'status', text: 'Disconnected from the multiplayer server' });
+      return;
+    }
+    const delay = RECONNECT_DELAYS[this.reconnectAttempts++] * 1000;
+    this.reconnectTimer = setTimeout(async () => {
+      if (this.manualClose || !this.lastArgs) return;
+      try {
+        await this.connect({ ...this.lastArgs, reconnect: true });
+      } catch {
+        if (!this.manualClose) this.scheduleReconnect();
+      }
+    }, delay);
+  }
+
+  get reconnecting() {
+    return !this.connected && !this.manualClose && (this.reconnectAttempts || 0) > 0;
   }
 
   disconnect() {
+    this.manualClose = true;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectAttempts = 0;
     if (this.transport) this.transport.close();
     this.transport = null;
     this.connected = false;
@@ -203,6 +322,7 @@ export class Multiplayer {
   }
 
   updateInfo(aircraft, livery) {
+    if (this.lastArgs) Object.assign(this.lastArgs, { aircraft, livery });
     if (this.transport) this.transport.send({ t: 'info', aircraft, livery: typeof livery === 'string' ? livery : livery?.id || '' });
   }
 
@@ -276,7 +396,9 @@ export class Multiplayer {
         this.emit({ type: 'chat', from: m.name, text: m.text, mine: m.id === this.myId });
         break;
       case 'error':
-        this.emit({ type: 'status', text: m.text });
+        // A full room will not free up by retrying; a restarting server will come back
+        if (m.text === 'Room is full') this.manualClose = true;
+        this.emit({ type: 'status', text: m.text === 'Server restarting' ? 'The multiplayer server is restarting — reconnecting…' : m.text });
         break;
     }
   }
