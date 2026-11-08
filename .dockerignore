@@ -1,0 +1,7 @@
+node_modules
+dist
+screenshots
+test-results
+.git
+.github
+*.log
