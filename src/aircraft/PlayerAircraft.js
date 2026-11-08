@@ -11,6 +11,7 @@ import { AircraftEffects } from './Effects.js';
 import { AIRPORT_INFO, nearestAirport, bestRunwayEnd } from '../world/airportGeometry.js';
 import { KT, FT, FPM, DEG } from '../physics/atmosphere.js';
 import { fmtTime, fmtDuration } from '../core/format.js';
+import { GunSystem } from '../combat/Guns.js';
 
 const ND_AIRPORTS = AIRPORT_INFO.map((a) => ({
   icao: a.icao,
@@ -59,6 +60,10 @@ export class PlayerAircraft {
     };
     collect(this.visual.root);
     this.interiorShadow = false;
+    // Fighters carry a cannon
+    this.gun = spec.gun ? new GunSystem(this, spec.gun) : null;
+    this.damage = 0;
+    this.lastHitToast = 0;
     // Fighters: the pilot sits above the hull line, so the cockpit tub is cut out of the
     // exterior skin with clipping planes (box in aircraft coordinates) in the cockpit view
     if (spec.cockpit === 'fighter') {
@@ -105,6 +110,7 @@ export class PlayerAircraft {
   }
 
   dispose() {
+    if (this.gun) this.gun.dispose();
     this.game.scene.remove(this.visual.root);
     this.visual.dispose();
     this.cockpit.dispose();
@@ -157,6 +163,30 @@ export class PlayerAircraft {
     }
   }
 
+  // Cannon hits from another pilot (multiplayer). Only fighters can be damaged.
+  applyDamage(dmg, byName, byId) {
+    const sim = this.sim;
+    const game = this.game;
+    if (this.spec.category !== 'fighter' || sim.crashed || this.game.state !== 'flying') return;
+    this.damage = Math.min(100, this.damage + dmg);
+    game.audio.burst({ type: 'brown', filter: 'lowpass', freq: 500, dur: 0.12, gain: 0.7, bus: 'env' });
+    game.combat.bullets.sparks(this.position, sim.fm.velocity);
+    const now = performance.now();
+    if (this.damage < 100 && now - this.lastHitToast > 1500) {
+      this.lastHitToast = now;
+      game.ui.toast(`Hit by ${byName}! Damage ${Math.round(this.damage)}%`, 'error', 1800);
+    }
+    if (this.damage >= 100) {
+      if (game.settings.get('gameplay').crashes) {
+        game.multiplayer.reportDown(byId);
+        sim.fm.crash(`Shot down by ${byName}`);
+      } else {
+        game.ui.toast(`Shot down by ${byName} (crashes are off — damage repaired)`, 'warn', 3000);
+        this.damage = 0;
+      }
+    }
+  }
+
   // Pick an ILS runway at the destination (or the nearest airport) into the wind
   autoSelectApproach() {
     const nav = this.sim.nav;
@@ -199,6 +229,7 @@ export class PlayerAircraft {
     sim.fm.infiniteFuel = !!game.settings.get('gameplay').unlimitedFuel;
 
     sim.update(dt);
+    if (this.gun && game.combat) this.gun.update(dt, !!ax.trigger, game.combat.bullets, game.combat.targets());
 
     // Visual transform
     const root = this.visual.root;
@@ -248,6 +279,7 @@ export class PlayerAircraft {
       shake += this.touchShake;
       this.touchShake = Math.max(0, this.touchShake - dt * 3);
     }
+    if (this.gun && this.gun.firing) shake += this.spec.gun.rate > 60 ? 0.35 : 0.5;
     this.shakeAmount = shake;
 
     // Events
@@ -279,6 +311,10 @@ export class PlayerAircraft {
         audio.explosion();
         this.effects.crash();
         game.onCrash(ev.reason);
+        break;
+      case 'wreckImpact':
+        audio.explosion();
+        this.effects.crash();
         break;
       case 'hardLanding':
         game.ui.toast(`Hard landing: ${Math.round(ev.vs / FPM)} fpm`, 'warn');
@@ -493,5 +529,11 @@ export class PlayerAircraft {
     d.messages = msgs;
     d.onGround = fm.wow;
     d.callsign = this.callsign;
+    d.damage = this.damage;
+    if (this.gun) {
+      const g = this.gun;
+      d.gun = d.gun || {};
+      Object.assign(d.gun, { name: this.spec.gun.name, armed: g.armed, ammo: g.ammo, rounds: this.spec.gun.rounds, firing: g.firing, pipX: g.sight.x, pipY: g.sight.y, range: g.lock ? g.range : null });
+    } else d.gun = null;
   }
 }

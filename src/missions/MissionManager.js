@@ -164,6 +164,10 @@ export class MissionManager {
         this.objects.push({ dispose: () => game.scene.remove(g) });
       }
       if (mission.checkpoints === 'canyon') this.buildRings(CANYON_RINGS);
+      if (mission.drones && game.combat) {
+        const d = mission.drones;
+        game.combat.spawnDrones({ x: d.x, z: d.z, alt: d.altFt * FT, count: d.count, spread: d.spread });
+      }
       if (mission.intercept) this.buildInterceptTarget(mission.intercept);
       if (mission.start && mission.start.pattern) this.buildPatternGuidance(getRunwayEnd(mission.start.pattern.airport, mission.start.pattern.runway));
     }
@@ -425,6 +429,8 @@ export class MissionManager {
         return 'Come to a complete stop';
       case 'rings':
         return `Fly through the rings (${this.rings ? this.rings.filter((r) => r.passed).length : 0}/${this.rings ? this.rings.length : 0})`;
+      case 'destroy':
+        return `Shoot down the target drones (${Math.min(o.count, this.game.combat ? this.game.combat.kills : 0)}/${o.count})`;
       default:
         return o.type;
     }
@@ -437,6 +443,8 @@ export class MissionManager {
     switch (o.type) {
       case 'takeoff':
         return !fm.wow && fm.agl > 15;
+      case 'destroy':
+        return !!this.game.combat && this.game.combat.kills >= o.count;
       case 'land': {
         const td = this.touchdown;
         if (!td || !fm.wow || fm.groundTime < 1.5) return false;

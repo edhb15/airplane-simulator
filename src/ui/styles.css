@@ -499,3 +499,16 @@ table.data .num { font-variant-numeric: tabular-nums; font-weight: 600; text-ali
   .main .menu button { font-size: 21px; padding: 6px 0 6px 22px; }
   .main .menu { margin-top: 26px; }
 }
+
+/* combat overlay */
+.target-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.target-box { position: absolute; left: 0; top: 0; border: 1.5px solid rgba(255, 196, 60, 0.85); border-radius: 2px; box-shadow: 0 0 6px rgba(0, 0, 0, 0.5); will-change: transform; }
+.target-box span { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 4px); white-space: nowrap; font-family: var(--font-mono); font-size: 11px; color: #ffd27a; text-shadow: 0 1px 3px #000; }
+.target-box.player { border-color: rgba(255, 90, 90, 0.9); }
+.target-box.player span { color: #ffb0b0; }
+.target-box.locked { border-width: 2.5px; border-color: #ff4040; box-shadow: 0 0 10px rgba(255, 60, 60, 0.7); }
+.gun-reticle { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; will-change: transform; }
+.gun-reticle::before { content: ''; position: absolute; left: -16px; top: -16px; width: 28px; height: 28px; border: 2px solid rgba(80, 255, 120, 0.9); border-radius: 50%; box-shadow: 0 0 4px rgba(0, 0, 0, 0.6); }
+.gun-reticle i { position: absolute; left: -2.5px; top: -2.5px; width: 5px; height: 5px; border-radius: 50%; background: rgba(80, 255, 120, 0.95); }
+.gun-reticle.locked::before { border-color: #ff5050; }
+.gun-reticle.firing::before { border-style: dashed; }

@@ -54,6 +54,7 @@ export const ACTION_INFO = {
   strobes: ['Strobe lights', 'Engines & systems'],
   dropSupplies: ['Drop supplies (rescue)', 'Engines & systems'],
   smoke: ['Smoke trail (air show)', 'Engines & systems'],
+  fireGun: ['Fire cannon (fighters, hold)', 'Weapons'],
   autopilot: ['Autopilot engage/disengage', 'Autopilot'],
   autothrottle: ['Autothrottle on/off', 'Autopilot'],
   camera: ['Next camera', 'Camera'],
@@ -531,6 +532,7 @@ export class MenuScreens {
       ['Wingspan', `${a.wing.span.toFixed(1)} m`],
       ['Cockpit', { airliner: 'Glass, fly-by-wire', ga: 'Analog gauges', fighter: 'HUD & MFDs' }[a.cockpit] || a.cockpit],
       ['Autopilot', a.autopilot.autoland ? 'With autoland' : a.autopilot.athr ? 'With autothrottle' : 'Basic'],
+      ...(a.gun ? [['Armament', `${a.gun.name}, ${a.gun.rounds} rds`]] : []),
     ];
     for (const [k, v] of specs) grid.appendChild(el('div', null, el('span', null, k), el('b', null, v)));
     detail.appendChild(grid);
@@ -1469,7 +1471,7 @@ export class MenuScreens {
       el(
         'div.muted',
         { style: { fontSize: '13px', lineHeight: '1.6', padding: '8px 0 16px' } },
-        'Gamepad layout: left stick = pitch & roll · LT/RT = throttle · LB/RB = rudder · A = brakes · B = flaps up · X = flaps down · Y = gear · Back = camera · Start = pause · L3 = ATC · R3 = centre view · D-pad ↑↓ = trim, ← = autopilot, → = map · right stick = look around.'
+        'Gamepad layout: left stick = pitch & roll · LT/RT = throttle · LB/RB = rudder · A = brakes (ground) / fire cannon (air) · B = flaps up · X = flaps down · Y = gear · Back = camera · Start = pause · L3 = ATC · R3 = centre view · D-pad ↑↓ = trim, ← = autopilot, → = map · right stick = look around.'
       )
     );
     const tick = () => {
@@ -1617,6 +1619,7 @@ const HANDBOOK = [
   ['ILS & autoland', 'Select an approach on the map (<kbd>M</kbd>) or request one from ATC. Fly towards the localizer and press APPR: LOC and G/S arm in blue and capture in green. Airliners with autoland will flare, retard the thrust and track the centreline automatically.'],
   ['Air traffic control', 'Press <kbd>Tab</kbd> for the radio menu. At the gate request pushback and taxi, follow the green taxi line to the holding point, report ready and wait for takeoff clearance. Inbound, request an approach — ATC gives vectors and landing clearance.'],
   ['Weather & navigation', 'The navigation display shows your route in magenta, other traffic and storm cells from the weather radar. Avoid red cells — they bring heavy turbulence and downdrafts. Crosswind landings need rudder to align with the runway just before touchdown.'],
+  ['Fighter guns', 'Hold <kbd>Space</kbd> (gamepad <kbd>A</kbd>, joystick trigger) to fire the cannon once airborne. Put the gunsight pipper on the target — it shows where your rounds will be, gravity drop included, and a range arc when a target is on the gun line. Land and stop to rearm. Spawn target drones from the pause menu in Free Flight, or fly the Gunnery Range mission.'],
   ['Cameras', '<kbd>1</kbd> cockpit · <kbd>2</kbd> cabin · <kbd>3</kbd> external · <kbd>4</kbd> wing · <kbd>5</kbd> cinematic · <kbd>6</kbd> tower · <kbd>7</kbd> fly-by. <kbd>C</kbd> cycles. Right-drag to look around, scroll to zoom. In the cockpit click switches and scroll over knobs.'],
 ];
 

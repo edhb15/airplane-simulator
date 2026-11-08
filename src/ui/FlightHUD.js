@@ -8,6 +8,7 @@ import { drawPFD, drawND } from '../cockpit/Instruments.js';
 import { CAMERA_LABELS } from '../camera/CameraManager.js';
 import { fmtHeading, fmtDuration, fmtLatLon, fmtTime, escapeHtml } from '../core/format.js';
 import { KT, FT } from '../physics/atmosphere.js';
+import * as THREE from 'three';
 
 const HUD_MODES = ['full', 'minimal', 'off'];
 
@@ -174,6 +175,65 @@ export class FlightHUD {
     r.appendChild(this.chat);
     this.fpsNode = el('div.fps.hidden');
     r.appendChild(this.fpsNode);
+    // Combat overlay: target boxes and the external-view gun reticle
+    this.targetLayer = el('div.target-layer');
+    r.appendChild(this.targetLayer);
+    this.targetBoxes = [];
+    this.reticle = el('div.gun-reticle.hidden', null, el('i'));
+    r.appendChild(this.reticle);
+  }
+
+  // Screen position of a world point, or null when behind the camera
+  project(p, out) {
+    const cam = this.game.camera;
+    _pv.copy(p).applyMatrix4(cam.matrixWorldInverse);
+    if (_pv.z > -1) return null;
+    _pv.applyMatrix4(cam.projectionMatrix);
+    out.x = ((_pv.x + 1) / 2) * window.innerWidth;
+    out.y = ((1 - _pv.y) / 2) * window.innerHeight;
+    return out;
+  }
+
+  updateCombatOverlay() {
+    const g = this.game;
+    const p = g.player;
+    const show = p && g.combat && !this.ui.modalOpen && g.state === 'flying';
+    g.camera.updateMatrixWorld(); // this frame's camera, not last frame's
+    const targets = show ? g.combat.targets() : [];
+    const units = g.settings.get('gameplay').units;
+    let n = 0;
+    for (const t of targets) {
+      t.getPosition(_tp);
+      const dist = _tp.distanceTo(p.position);
+      if (dist > 8000 || dist < 30) continue;
+      const sp = this.project(_tp, _sp);
+      if (!sp) continue;
+      let box = this.targetBoxes[n];
+      if (!box) {
+        box = el('div.target-box', null, el('span'));
+        this.targetLayer.appendChild(box);
+        this.targetBoxes.push(box);
+      }
+      const size = Math.max(18, Math.min(60, 9000 / dist));
+      box.style.transform = `translate(${sp.x - size / 2}px, ${sp.y - size / 2}px)`;
+      box.style.width = box.style.height = `${size}px`;
+      box.classList.toggle('locked', p.gun && p.gun.lock === t);
+      box.classList.toggle('player', t.kind === 'player');
+      box.classList.remove('hidden');
+      box.firstChild.textContent = `${t.callsign || ''} ${units === 'metric' ? (dist / 1000).toFixed(1) + ' km' : (dist / 1852).toFixed(1) + ' NM'}`;
+      n++;
+    }
+    for (let i = n; i < this.targetBoxes.length; i++) this.targetBoxes[i].classList.add('hidden');
+    // Reticle in external views (the cockpit HUD has its own gunsight)
+    const gun = p && p.gun;
+    const ext = show && gun && gun.armed && g.cameras.mode !== 'cockpit';
+    const rp = ext ? this.project(gun.impactPoint, _sp) : null;
+    this.reticle.classList.toggle('hidden', !rp);
+    if (rp) {
+      this.reticle.style.transform = `translate(${rp.x}px, ${rp.y}px)`;
+      this.reticle.classList.toggle('firing', gun.firing);
+      this.reticle.classList.toggle('locked', !!gun.lock);
+    }
   }
 
   buildAP() {
@@ -255,6 +315,8 @@ export class FlightHUD {
   }
   hide() {
     this.root.classList.add('hidden');
+    for (const b of this.targetBoxes) b.classList.add('hidden');
+    this.reticle.classList.add('hidden');
     this.closeATC();
     this.closeChat();
     this.tooltip.classList.add('hidden');
@@ -499,6 +561,7 @@ export class FlightHUD {
     const p = g.player;
     if (!p) return;
     this.updateHover(dt);
+    this.updateCombatOverlay();
     this.timer -= dt;
     this.canvasTimer -= dt;
     const inside = g.cameras.inside;
@@ -545,6 +608,9 @@ export class FlightHUD {
     if (g.paused) chip('', 'PAUSED');
     chip('', fmtTime(g.world.time));
     chip('CAM', (CAMERA_LABELS[g.cameras.mode] || '').toUpperCase());
+    if (fd.gun) chip('GUN', fd.gun.armed ? `${fd.gun.ammo}` : 'SAFE');
+    if (fd.damage > 0) chip('DMG', `${Math.round(fd.damage)}%`);
+    if (g.combat && g.combat.drones.some((d) => d.alive)) chip('TGT', `${g.combat.drones.filter((d) => d.alive).length}`);
     if (g.multiplayer.connected) chip('MP', `${g.multiplayer.players.length + 1}`);
     else if (g.multiplayer.reconnecting) chip('MP', 'reconnecting…');
     this.renderRadio();
@@ -647,3 +713,7 @@ export class FlightHUD {
 }
 
 export { keyCap, KT, FT };
+
+const _pv = new THREE.Vector3();
+const _tp = new THREE.Vector3();
+const _sp = { x: 0, y: 0 };

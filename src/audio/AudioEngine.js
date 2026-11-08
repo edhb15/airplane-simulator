@@ -292,6 +292,55 @@ export class AudioEngine {
     o.stop(t + dur * 2 + 0.2);
   }
 
+  // Cannon: noise chopped at the rate of fire plus a low tone at the same rate
+  // ("brrrt" for a rotary cannon, distinct thuds for a revolver cannon)
+  setGun(firing, rate = 100) {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    if (!this.gunVoice) {
+      if (!firing) return;
+      const src = ctx.createBufferSource();
+      src.buffer = this.noise.white;
+      src.loop = true;
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = 650;
+      band.Q.value = 0.6;
+      const chop = ctx.createGain();
+      chop.gain.value = 0.5;
+      const lfo = ctx.createOscillator();
+      lfo.type = 'square';
+      const lfoDepth = ctx.createGain();
+      lfoDepth.gain.value = 0.5;
+      lfo.connect(lfoDepth).connect(chop.gain);
+      const body = ctx.createOscillator();
+      body.type = 'sawtooth';
+      const bodyLow = ctx.createBiquadFilter();
+      bodyLow.type = 'lowpass';
+      bodyLow.frequency.value = 260;
+      const bodyGain = ctx.createGain();
+      bodyGain.gain.value = 0.55;
+      const out = ctx.createGain();
+      out.gain.value = 0;
+      src.connect(band).connect(chop).connect(out);
+      body.connect(bodyLow).connect(bodyGain).connect(out);
+      out.connect(this.buses.engine);
+      src.start();
+      lfo.start();
+      body.start();
+      this.gunVoice = { out, lfo, body, band, firing: false };
+    }
+    const v = this.gunVoice;
+    const t = ctx.currentTime;
+    if (firing !== v.firing) {
+      v.firing = firing;
+      v.lfo.frequency.setValueAtTime(rate, t);
+      v.body.frequency.setValueAtTime(rate, t);
+      v.band.frequency.setValueAtTime(rate > 60 ? 700 : 380, t);
+      v.out.gain.setTargetAtTime(firing ? (rate > 60 ? 0.9 : 1.2) : 0, t, firing ? 0.008 : 0.04);
+    }
+  }
+
   click() {
     this.burst({ freq: 3200, q: 2, dur: 0.02, gain: 0.35 });
     this.burst({ freq: 900, q: 1, dur: 0.03, gain: 0.2 });
@@ -434,6 +483,7 @@ export class AudioEngine {
   }
 
   stopAllWarnings() {
+    this.setGun(false);
     for (const k of Object.keys(this.warnLoops)) this.setWarning(k, false);
   }
 

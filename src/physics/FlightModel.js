@@ -3,7 +3,7 @@
 // induced/parasitic/wave drag, ground effect, flaps, spoilers and gear drag.
 // Landing gear are spring-damper contacts with rolling, braking and side friction.
 
-import { Vector3, Quaternion } from 'three';
+import { Vector3, Quaternion, Euler } from 'three';
 import { atmosphere, G0, DEG, tasToIas } from './atmosphere.js';
 import { createEngines } from './engines.js';
 import { structuralContacts } from '../aircraft/aircraftData.js';
@@ -221,10 +221,25 @@ export class FlightModel {
   step(dt) {
     this.time += dt;
     if (this.crashed) {
+      for (const e of this.engines) e.thrust = 0;
+      const g = this.groundFn(this.position.x, this.position.z, this.position.y);
+      if (this.position.y > g.h + 1.5) {
+        // Wreck still airborne (shot down, overstress...): fall and tumble
+        this.velocity.multiplyScalar(Math.max(0, 1 - 0.12 * dt));
+        this.velocity.y -= 9.81 * dt;
+        if (!this.tumble) this.tumble = new Vector3((Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 2.5);
+        _dq.setFromEuler(_de.set(this.tumble.x * dt, this.tumble.y * dt, this.tumble.z * dt));
+        this.quaternion.multiply(_dq).normalize();
+        this.position.addScaledVector(this.velocity, dt);
+        if (this.position.y <= g.h + 1.5) {
+          this.position.y = g.h + 1;
+          this.emit('wreckImpact', { speed: this.velocity.length(), water: g.water });
+        }
+        return;
+      }
       this.velocity.multiplyScalar(Math.max(0, 1 - 3 * dt));
       this.omega.multiplyScalar(Math.max(0, 1 - 3 * dt));
       this.position.addScaledVector(this.velocity, dt);
-      for (const e of this.engines) e.thrust = 0;
       return;
     }
     const spec = this.spec;
@@ -684,3 +699,6 @@ const _qc = new Quaternion();
 const _ax = new Vector3(1, 0, 0);
 const _ay = new Vector3(0, 1, 0);
 const _az = new Vector3(0, 0, 1);
+
+const _dq = new Quaternion();
+const _de = new Euler();
