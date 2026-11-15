@@ -6,13 +6,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:crazygames": "vite --mode crazygames",
     "build": "vite build",
+    "build:crazygames": "vite build --mode crazygames",
+    "package:crazygames": "vite build --mode crazygames && node tools/packCrazyGames.mjs",
     "preview": "vite preview",
     "server": "node server/server.js",
     "start": "vite build && node server/server.js",
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource/b612-mono": "^5.3.0",
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
     "three": "0.170.0",
     "ws": "^8.18.0"
   },

@@ -31,6 +31,7 @@ import { MissionManager } from '../missions/MissionManager.js';
 import { Multiplayer } from '../net/Multiplayer.js';
 import { CombatManager } from '../combat/Combat.js';
 import { UIManager } from '../ui/UIManager.js';
+import { platform } from '../platform/platform.js';
 import { KT, FT, NM, DEG, atmosphere, tasToIas } from '../physics/atmosphere.js';
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
@@ -51,6 +52,9 @@ export class Game {
     this.fps = 60;
     this.pixelRatio = 1;
     this.atcStrict = false;
+    this.flightsThisSession = 0;
+    this.pauseCount = 0;
+    this.platform = platform;
     window.__sim = this;
   }
 
@@ -187,9 +191,11 @@ export class Game {
       if (pend < 4) break;
     }
     this.state = 'menu';
-    this.ui.showScreen('main');
+    // A friend's portal invite link goes straight to the multiplayer screen
+    this.ui.showScreen(platform.inviteParam('room') ? 'multiplayer' : 'main');
+    platform.loadingStop();
     window.addEventListener('beforeunload', (e) => {
-      if (this.state === 'flying') {
+      if (this.state === 'flying' && platform.allowUnloadPrompt) {
         e.preventDefault();
         e.returnValue = '';
       }
@@ -243,6 +249,15 @@ export class Game {
     this.state = 'loading';
     this.paused = false;
     this.flightConfig = config;
+    platform.gameplayStop();
+    // Between flights is a natural break for a portal ad (rate-limited; a
+    // no-op outside the portal build). The game is muted while it plays.
+    if (this.flightsThisSession > 0) {
+      this.ui.showLoading('Preparing your flight', 0.05);
+      await platform.midgameAd();
+    }
+    this.flightsThisSession++;
+    platform.loadingStart();
     this.ui.showLoading('Preparing your flight', 0.1);
     await nextFrame();
     this.removeShowcase();
@@ -266,6 +281,8 @@ export class Game {
     const livery = config.livery || this.profile.liveryFor(spec.id);
     this.player = new PlayerAircraft(this, spec, livery, { callsign: config.callsign });
     const sim = this.player.sim;
+    // Lessons can ask for a gentler control law (e.g. the quick-start tutorial)
+    if (config.tutorial && config.mission && config.mission.assist) sim.setAssist(config.mission.assist);
     const spawn = this.resolveSpawn(config, spec);
     sim.spawn({ ...spawn, fuelFrac: config.fuel ?? 0.6, payloadFrac: config.payloadFrac ?? this.payloadFraction(spec, config.mission) });
     if (spawn.mode === 'air' && spawn.gearDown) {
@@ -312,6 +329,8 @@ export class Game {
       if (pend < 3) break;
     }
     this.state = 'flying';
+    platform.loadingStop();
+    platform.gameplayStart();
     this.ui.showFlight();
     if (config.tutorial && config.mission) this.ui.tutorialStep(config.mission.steps[0], 0, config.mission.steps.length);
     else if (config.mission) this.ui.toast(`Objective: ${this.missions.currentObjectiveText()}`, 'info', 6000);
@@ -415,6 +434,8 @@ export class Game {
       this.profile.persist();
     }
     result.rankUp = rankUp;
+    platform.gameplayStop();
+    if ((result.success && result.kind !== 'free') || rankUp) platform.happytime();
     this.audio.chime(result.success ? 'mission' : 'fail');
     if (showDebrief) {
       this.state = 'debrief';
@@ -434,6 +455,7 @@ export class Game {
     this.traffic.clear();
     this.combat.reset();
     this.menuInit = false;
+    platform.gameplayStop();
     this.setupMenuScene();
     this.state = 'menu';
     this.paused = false;
@@ -449,14 +471,18 @@ export class Game {
     this.missions.onLiftoff(ev);
   }
   onCrash(reason) {
+    platform.gameplayStop();
     this.missions.onCrash(reason);
     this.ui.showCrash(reason);
     this.audio.stopAllWarnings();
   }
 
   setPaused(p) {
+    if (p && !this.paused) this.pauseCount++;
     this.paused = p;
     if (p) this.audio.stopAllWarnings();
+    if (p) platform.gameplayStop();
+    else if (this.state === 'flying' && this.player && !this.player.sim.crashed) platform.gameplayStart();
   }
 
   teleport(x, z, altFt = null) {

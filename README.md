@@ -32,6 +32,32 @@ The game must be served from the Vite build (`dist/`), not from the source files
 
 GitHub Pages only hosts static files, so online multiplayer needs the server below running somewhere else.
 
+### CrazyGames
+
+The game can be published on [CrazyGames](https://developer.crazygames.com). A separate build includes the CrazyGames HTML5 SDK (v3); the normal build and GitHub Pages are unaffected.
+
+```bash
+npm run package:crazygames   # builds dist-crazygames/ and writes skyward-crazygames.zip
+```
+
+Upload `skyward-crazygames.zip` (index.html is at the root of the archive, about 0.7 MB) in the CrazyGames developer portal as an HTML5 game. The *CrazyGames package* workflow also builds it on every push to `main`: open the run in the Actions tab and download the `skyward-crazygames` artifact (GitHub zips it for you). To bake in a multiplayer server, set the `MP_SERVER_URL` repository variable described below.
+
+To try it locally with the SDK's local test mode (demo ads, logged SDK calls): `npm run dev:crazygames`.
+
+What the CrazyGames build does (see `src/platform/platform.js`):
+
+| SDK feature | Used for |
+| --- | --- |
+| `game.loadingStart` / `loadingStop` | Initial loading and the scenery loading before each flight |
+| `game.gameplayStart` / `gameplayStop` | Flying vs. menus, pause, crash and debrief screens |
+| `game.happytime` | Mission or lesson passed, promotion |
+| `ad.requestAd('midgame')` | Between flights only (when starting another flight), at most every 3 minutes; the game is muted while the ad plays |
+| `game.settings` (`muteAudio`, `disableChat`) | Mutes all sound and speech; hides multiplayer chat |
+| `data` | Progress and settings are saved to the player's CrazyGames account (with localStorage as a fallback) |
+| `game.inviteLink` / `getInviteParam` | *Invite friends* button in Multiplayer; an invite link opens the right room |
+
+Portal rules handled by the build: no Exit button, no "leave this page?" prompt, arrow keys and Space never scroll the page, no external links, fonts bundled with the game (no third-party requests besides the SDK and the optional multiplayer server). If the SDK is blocked (e.g. by an ad blocker), the game still runs normally.
+
 ### Multiplayer server
 
 `server/server.js` is a small WebSocket relay: pilots in the same room see each other's aircraft and chat. It has no database and needs no configuration, so any Node.js host works. The game finds it through the `MP_SERVER_URL` repository variable (baked into the Pages build), a `?server=` link, or the address a player types in the Multiplayer screen.
@@ -100,6 +126,7 @@ Four aircraft (one per category) are available from the start; the rest are boug
 - **Free Flight** — any owned aircraft, any airport, gate/runway/final approach/in-flight start, time, weather, wind, fuel and payload, optional GPS destination.
 - **Career Mode** — a job board of passenger and cargo flights from your current base, paid by landing quality, passenger comfort and punctuality. Seven pilot ranks, a logbook and statistics.
 - **Missions** — 21 missions in six categories: passenger, cargo, emergency landings (engine failure, fire, glider, gear failure, fuel leak), search & rescue (find and supply drops), long-distance and military (gunnery range, canyon rings, intercept, air show).
+- **Tutorial** — new players are offered a 3-minute guided first flight (take off, climb, level off, turn, cameras, map and pause) on their first visit. It leads the main menu until it is passed and stays available in Flight School. Every lesson step has a *Skip step* button.
 - **Flight School** — six interactive lessons from basic controls to ILS autoland and fighter handling, plus a pilot handbook.
 - **Multiplayer** — fly with other pilots in shared rooms with chat; other aircraft appear in the world, on the map, the navigation display and TCAS. A *Local* mode links several browser tabs without a server.
 
@@ -177,9 +204,10 @@ src/
   audio/      procedural sound engine
   camera/     camera modes
   ui/         menus, HUD, map, styles
+  platform/   web portal integration (CrazyGames SDK)
 server/       static file + WebSocket relay server
 tests/        flight-model tests (vitest)
-tools/        headless test and debugging scripts
+tools/        headless test, debugging and packaging scripts
 dev/          model and world viewers for development
 ```
 
@@ -188,6 +216,7 @@ dev/          model and world viewers for development
 ```bash
 npm test                         # flight model, cannon ballistics and the multiplayer server
 node tools/flows.mjs             # in-browser smoke test of all missions, tutorials, career, ATC, crash/debrief, multiplayer
+node tools/quickstartTest.mjs    # flies the new-player tutorial end to end with real key presses
 node tools/e2e.mjs               # menus + a flight with screenshots (needs the dev server and Playwright)
 node tools/views.mjs URL out mj320,k172 cockpit,cabin   # camera view screenshots
 node tools/autolandTest.mjs      # headless autoland runs for the airliners

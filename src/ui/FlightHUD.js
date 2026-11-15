@@ -9,6 +9,7 @@ import { CAMERA_LABELS } from '../camera/CameraManager.js';
 import { fmtHeading, fmtDuration, fmtLatLon, fmtTime, escapeHtml } from '../core/format.js';
 import { KT, FT } from '../physics/atmosphere.js';
 import * as THREE from 'three';
+import { platform } from '../platform/platform.js';
 
 const HUD_MODES = ['full', 'minimal', 'off'];
 
@@ -367,10 +368,17 @@ export class FlightHUD {
     const t = this.tutorial;
     clear(t);
     t.classList.remove('hidden');
-    t.appendChild(el('div.hdr', null, el('span', null, 'Flight School'), el('span', null, `Step ${index + 1} / ${total}`)));
+    const m = this.game.missions.mission;
+    t.appendChild(el('div.hdr', null, el('span', null, m && m.quick ? 'Tutorial' : 'Flight School'), el('span', null, `Step ${index + 1} / ${total}`)));
     t.appendChild(el('div.txt', null, step.text));
     if (step.keys) t.appendChild(el('div.keys', null, 'Keys: ', ...step.keys.split(/\s*\/\s*|\s*\+\s*/).map((k) => el('kbd', null, k))));
     t.appendChild(el('div.prog', null, el('div', { style: { width: `${((index + 1) / total) * 100}%` } })));
+    if (!step.final && !step.wait) {
+      // Not focusable, so Space/Enter keep going to the aircraft after a click
+      const skip = el('button.skip', { type: 'button', tabIndex: -1, title: 'Skip this step', onclick: () => this.game.missions.skipTutorialStep() }, 'Skip step ›');
+      skip.addEventListener('mousedown', (e) => e.preventDefault());
+      t.appendChild(el('div.tut-actions', null, skip));
+    }
     t.classList.remove('flash');
     void t.offsetWidth;
     t.classList.add('flash');
@@ -478,6 +486,10 @@ export class FlightHUD {
 
   // ------------------------------------------------------------------ chat
   openChat() {
+    if (platform.chatDisabled) {
+      this.ui.toast('Chat is turned off in your settings', 'info');
+      return;
+    }
     this.chatOpen = true;
     this.chatInput.classList.remove('hidden');
     this.game.input.context = 'text';

@@ -2,6 +2,8 @@
 // afterburner), wind, ground roll, rain, thunder, mechanical sounds, cockpit
 // warnings and speech (ATC radio and GPWS callouts).
 
+import { platform } from '../platform/platform.js';
+
 function makeNoise(ctx, seconds, type) {
   const len = Math.floor(ctx.sampleRate * seconds);
   const buf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -99,6 +101,15 @@ export class AudioEngine {
     settings.on('change', (e) => {
       if (e.section === 'audio') this.applyVolumes();
     });
+    // Portal mute setting and ads silence everything, speech included
+    platform.on((ev) => {
+      if (ev.type !== 'mute') return;
+      this.applyVolumes();
+      if (ev.muted && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        this.speechQueue = [];
+      }
+    });
   }
 
   // Must be called from a user gesture
@@ -151,7 +162,7 @@ export class AudioEngine {
     if (!this.ctx) return;
     const a = this.settings.get('audio');
     const t = this.ctx.currentTime;
-    this.master.gain.setTargetAtTime(a.master, t, 0.05);
+    this.master.gain.setTargetAtTime(platform.muted ? 0 : a.master, t, 0.05);
     this.buses.engine.gain.setTargetAtTime(a.engine, t, 0.05);
     this.buses.env.gain.setTargetAtTime(a.environment, t, 0.05);
     this.buses.ui.gain.setTargetAtTime(a.ui, t, 0.05);
@@ -496,7 +507,7 @@ export class AudioEngine {
   }
 
   speak(text, kind = 'atc', { priority = false } = {}) {
-    if (!window.speechSynthesis || !this.settings.get('audio').voice) return;
+    if (!window.speechSynthesis || !this.settings.get('audio').voice || platform.muted) return;
     if (priority) {
       window.speechSynthesis.cancel();
       this.speechQueue = [];

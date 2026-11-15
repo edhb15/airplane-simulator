@@ -547,18 +547,31 @@ export class MissionManager {
       this.stepHold += dt;
       ok = this.stepHold > s.hold;
     } else if (!ok) this.stepHold = 0;
-    if (ok) {
-      if (s.final) {
-        if (!this.done) this.finish(true);
-        return;
-      }
-      this.stepIndex++;
-      this.stepTime = 0;
-      this.stepHold = 0;
-      this.stepState = {};
-      game.audio.chime('mission');
-      game.ui.tutorialStep(steps[this.stepIndex], this.stepIndex, steps.length);
+    if (ok) this.advanceTutorial();
+  }
+
+  advanceTutorial() {
+    const steps = this.mission.steps;
+    const s = steps[this.stepIndex];
+    if (!s) return;
+    if (s.final) {
+      if (!this.done) this.finish(true);
+      return;
     }
+    this.stepIndex++;
+    this.stepTime = 0;
+    this.stepHold = 0;
+    this.stepState = {};
+    this.game.audio.chime('mission');
+    this.game.ui.tutorialStep(steps[this.stepIndex], this.stepIndex, steps.length);
+  }
+
+  // "Skip step" button in the lesson panel, for players who are stuck
+  skipTutorialStep() {
+    if (this.kind !== 'tutorial' || this.done || !this.mission) return;
+    const s = this.mission.steps[this.stepIndex];
+    if (!s || s.final) return;
+    this.advanceTutorial();
   }
 
   currentObjectiveText() {

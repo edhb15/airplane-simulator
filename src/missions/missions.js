@@ -496,7 +496,47 @@ export const MISSIONS = [
 const sim = (g) => g.player.sim;
 const snap = (g) => g.player.flightData;
 
+// Short first-flight tutorial offered to new players on their first visit
+export const QUICKSTART_ID = 'tut-quickstart';
+
 export const TUTORIALS = [
+  {
+    id: QUICKSTART_ID,
+    title: 'Quick Start: Your First Flight',
+    aircraft: 'k172',
+    desc: 'New here? A 3-minute guided flight: take off, climb, turn, change the view and use the map.',
+    start: { airport: 'AXPV', spawn: 'runway', runway: '22' },
+    time: 10,
+    weather: 'fewClouds',
+    wind: { dir: 220, speed: 2 },
+    assist: 'beginner',
+    camera: 'chase',
+    quick: true,
+    steps: [
+      { text: 'Welcome aboard! You are lined up on the runway in a Kestrel K-172, a forgiving trainer. Follow the instructions in this box — the next one appears with a chime as soon as you get it right.', wait: 6 },
+      { text: 'First, release the parking brake.', keys: 'K', check: (g) => !sim(g).parkingBrake },
+      { text: 'Now give it full power! Press F4 (or hold Shift to push the throttle up gradually).', keys: 'F4 / Shift', check: (g) => sim(g).throttleLever > 0.95 },
+      { text: 'You are rolling. Steer with Q / E to stay on the centre line. At 55 knots on the speed readout, hold S (or ↓) to lift the nose — just like pulling back on a real control stick.', keys: 'S / ↓', check: (g) => !snap(g).onGround && snap(g).radioAlt > 30 },
+      { text: 'You are flying! Keep the nose a little above the horizon and climb to 800 ft above the ground. Too steep and you will slow down — ease off S if the speed drops below 60 knots.', check: (g) => snap(g).radioAlt > 800 },
+      { text: 'Level off: tap W (or ↑) to lower the nose until the vertical speed (V/S) is close to zero.', keys: 'W / ↑', check: (g) => Math.abs(snap(g).vs) < 400, hold: 1.5 },
+      { text: 'Turning: hold A (or ←) to bank left to about 20°. The aircraft turns as long as the wings are banked.', keys: 'A / ←', check: (g) => snap(g).bank < -18 },
+      { text: 'Now press D (or →) to roll back until the wings are level again.', keys: 'D / →', check: (g) => Math.abs(snap(g).bank) < 8, hold: 1.5 },
+      { text: 'Change your view: press 1 for the cockpit, 3 for this outside view, or C to cycle through every camera. Right-drag the mouse to look around.', keys: '1 / 3 / C', check: (g, t, st) => {
+        const m = g.cameras.mode;
+        if (st.mode0 === undefined) st.mode0 = m;
+        return m !== st.mode0;
+      } },
+      { text: 'Open the map with M to see where you are and the airports around you. Press M again (or Esc) to close it.', keys: 'M', check: (g, t, st) => {
+        if (g.ui.map.open) st.opened = true;
+        return !!st.opened && !g.ui.map.open;
+      } },
+      { text: 'Last one: press Esc (or P) to pause. The pause menu has the controls list, settings and restart. Press Esc again to resume.', keys: 'Esc / P', check: (g, t, st) => {
+        if (st.p0 === undefined) st.p0 = g.pauseCount;
+        return g.pauseCount > st.p0 && !g.paused;
+      } },
+      { text: 'Great flying — you have the basics! Next, learn to land in Flight School, or jump into Missions and Free Flight. More controls: press ` (backquote) or F10 at any time.', wait: 7, final: true },
+    ],
+  },
   {
     id: 'tut-basics',
     title: '1. Basic Flight Controls',
