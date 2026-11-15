@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { AircraftVisual } from '../aircraft/AircraftVisual.js';
 import { getAircraft } from '../aircraft/aircraftData.js';
 import { FT, KT } from '../physics/atmosphere.js';
+import { platform } from '../platform/platform.js';
 
 const SEND_HZ = 10;
 const DELAY = 0.15;
@@ -254,6 +255,8 @@ export class Multiplayer {
     this.transport.onmessage = (m) => this.receive(m);
     this.transport.send(this.hello);
     this.connected = true;
+    // Portal invite button: friends who use it land in this room
+    if (this.mode === 'server') platform.showInviteButton({ room: this.room });
     this.emit({ type: 'status', text: reconnect ? 'Reconnected to the multiplayer server' : `Connected — room "${this.room}"` });
     this.reconnectAttempts = 0;
   }
@@ -282,6 +285,7 @@ export class Multiplayer {
   }
 
   disconnect() {
+    if (this.connected || this.transport) platform.hideInviteButton();
     this.manualClose = true;
     clearTimeout(this.reconnectTimer);
     this.reconnectAttempts = 0;

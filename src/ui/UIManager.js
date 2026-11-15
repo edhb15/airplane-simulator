@@ -8,6 +8,7 @@ import { FlightHUD } from './FlightHUD.js';
 import { MapView } from './MapView.js';
 import { WEATHER_PRESETS } from '../world/Weather.js';
 import { TUTORIALS, QUICKSTART_ID } from '../missions/missions.js';
+import { PRIVACY, TERMS, LEGAL_UPDATED } from './legal.js';
 import { fmtMoney, fmtDuration, fmtTime } from '../core/format.js';
 import { keyCap } from './dom.js';
 
@@ -166,6 +167,45 @@ export class UIManager {
     }
   }
 
+  // Privacy Policy / Terms of Use (tab: 'privacy' | 'terms'). Reopens the
+  // window it was opened from (welcome prompt, settings, pause menu) on close.
+  showLegal(tab = 'privacy') {
+    const prev = this.modal ? this.modal.kind : null;
+    const body = el('div.scroll.legal-body');
+    const tabs = el('div.legal-tabs');
+    const render = (t) => {
+      tab = t;
+      clear(body);
+      for (const b of tabs.children) b.classList.toggle('primary', b.dataset.tab === t);
+      body.appendChild(el('div.muted', { style: { fontSize: '12px', marginBottom: '10px' } }, `Last updated ${LEGAL_UPDATED}`));
+      for (const [h, text] of t === 'terms' ? TERMS : PRIVACY) body.appendChild(el('div.legal-sec', null, el('h3', null, h), el('p', null, text)));
+      body.scrollTop = 0;
+    };
+    for (const [id, label] of [
+      ['privacy', 'Privacy Policy'],
+      ['terms', 'Terms of Use'],
+    ])
+      tabs.appendChild(button(label, () => render(id), 'small'));
+    [...tabs.children].forEach((b, i) => (b.dataset.tab = i ? 'terms' : 'privacy'));
+    const node = el(
+      'div.modal.panel.wide.legal',
+      null,
+      el('h2', null, 'Privacy & Terms'),
+      tabs,
+      body,
+      el('div', { style: { display: 'flex', justifyContent: 'flex-end', marginTop: '14px' } }, button('Close', () => this.closeModal(), 'primary'))
+    );
+    render(tab);
+    this.openModal(node, {
+      kind: 'legal',
+      onClose: () => {
+        if (prev === 'welcome' && !this.game.profile.data.onboarded) this.showWelcome();
+        else if (prev === 'settings') this.openSettings();
+        else if (this.game.paused) this.showPause();
+      },
+    });
+  }
+
   // First visit: offer the quick-start tutorial
   showWelcome() {
     const g = this.game;
@@ -183,6 +223,7 @@ export class UIManager {
       el('h2', { style: { marginTop: '10px' } }, 'First time in the cockpit?'),
       el('p.muted', null, 'Take the 3-minute tutorial: you will take off, climb, turn, switch cameras and use the map, one simple step at a time.'),
       el('div.wl-tips', null, tip('W / S', 'Nose down / up'), tip('A / D', 'Roll left / right'), tip('Shift / Ctrl', 'Throttle up / down'), tip('Esc', 'Pause menu')),
+      el('div', { style: { marginTop: '14px', fontSize: '12px' } }, this.menus.legalLinks('By playing you accept the Terms of Use; see the Privacy Policy for what is saved')),
       el(
         'div',
         { style: { display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '18px', flexWrap: 'wrap' } },

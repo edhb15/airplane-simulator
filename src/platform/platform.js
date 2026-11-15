@@ -207,6 +207,18 @@ class Platform {
   inviteParam(name) {
     return this.call((s) => s.game.getInviteParam(name)) || null;
   }
+  // Launched with the portal's "Play with friends" (instant multiplayer) button:
+  // this player is the party leader and goes straight into a new room
+  get isInstantMultiplayer() {
+    return !!this.call((s) => s.game.isInstantMultiplayer);
+  }
+  // The portal's own invite button, shown while the player is in a room
+  showInviteButton(params) {
+    return this.call((s) => (s.game.showInviteButton ? s.game.showInviteButton(params) : null)) || null;
+  }
+  hideInviteButton() {
+    this.call((s) => s.game.hideInviteButton && s.game.hideInviteButton());
+  }
 
   // ---------------------------------------------------------------- storage
   // The portal's data module mirrors localStorage and syncs saves to the

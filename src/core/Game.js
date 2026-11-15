@@ -196,7 +196,10 @@ export class Game {
     }
     this.state = 'menu';
     // A friend's portal invite link goes straight to the multiplayer screen
+    // Invited by a friend: join their room. Started with the portal's instant
+    // multiplayer button: this player leads a party, so open a new room for it
     if (platform.inviteParam('room')) this.ui.showScreen('multiplayer', { autoConnect: true });
+    else if (platform.isInstantMultiplayer) this.ui.showScreen('multiplayer', { autoConnect: true, room: `party-${Math.random().toString(36).slice(2, 8)}`, party: true });
     else this.ui.showScreen('main');
     platform.loadingStop();
     window.addEventListener('beforeunload', (e) => {

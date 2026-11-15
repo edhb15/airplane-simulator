@@ -520,3 +520,14 @@ table.data .num { font-variant-numeric: tabular-nums; font-weight: 600; text-ali
 .ccip-mark::before { content: ''; position: absolute; left: -13px; top: -13px; width: 22px; height: 22px; border: 2px solid rgba(80, 255, 120, 0.95); border-radius: 50%; box-shadow: 0 0 4px rgba(0, 0, 0, 0.6); }
 .ccip-mark i { position: absolute; left: -1px; top: -24px; width: 2px; height: 48px; background: rgba(80, 255, 120, 0.8); }
 .ccip-mark span { position: absolute; left: 16px; top: -7px; white-space: nowrap; font-family: var(--font-mono); font-size: 10px; color: #8dffa8; text-shadow: 0 1px 3px #000; }
+
+/* privacy policy / terms of use */
+.legal-links { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.legal-link { background: none; border: 0; padding: 0; font: inherit; color: var(--cyan); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.legal-link:hover { color: #fff; }
+.main .footer .legal-links { margin-top: 4px; }
+.modal.legal { width: min(760px, 94vw); height: min(80vh, 760px); }
+.legal-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.legal-body { flex: 1; min-height: 0; padding-right: 8px; }
+.legal-sec h3 { margin: 14px 0 4px; font-family: var(--font-cond); font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.legal-sec p { margin: 0; font-size: 14px; line-height: 1.55; color: #c5d3e4; }

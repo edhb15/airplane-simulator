@@ -57,8 +57,10 @@ What the CrazyGames build does (see `src/platform/platform.js`):
 | `game.settings` (`muteAudio`) | Mutes all sound and speech |
 | `data` | Progress and settings are saved to the player's CrazyGames account (with localStorage as a fallback) |
 | `game.inviteLink` / `getInviteParam` | *Invite friends* button in Multiplayer; an invite link opens the right room |
+| `game.isInstantMultiplayer` | Started with CrazyGames' *Play with friends* button: the party leader goes straight into a new private room (`party-…`, hidden from the room list) |
+| `game.showInviteButton` / `hideInviteButton` | CrazyGames' own invite button is shown while the player is in a multiplayer room |
 
-Portal rules handled by the build: no Exit button, no "leave this page?" prompt, arrow keys and Space never scroll the page, no external links, fonts bundled with the game (no third-party requests besides the SDK and the optional multiplayer server). If the SDK is blocked (e.g. by an ad blocker), the game still runs normally.
+A **Privacy Policy** and **Terms of Use** are in the game (main menu footer, welcome prompt, Multiplayer screen and *Settings → Gameplay*); the texts are in `src/ui/legal.js` — keep them in line with what the game does. Portal rules handled by the build: no Exit button, no "leave this page?" prompt, arrow keys and Space never scroll the page, no external links, fonts bundled with the game (no third-party requests besides the SDK and the optional multiplayer server). If the SDK is blocked (e.g. by an ad blocker), the game still runs normally.
 
 ### Multiplayer server
 

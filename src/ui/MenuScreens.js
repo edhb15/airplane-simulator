@@ -213,7 +213,7 @@ export class MenuScreens {
     return el(
       'div.screen.main',
       null,
-      el('div.left', null, this.logo(), menu, el('div.footer', null, 'Skyward Flight Simulator · World of Aurelia · v1.0')),
+      el('div.left', null, this.logo(), menu, el('div.footer', null, 'Skyward Flight Simulator · World of Aurelia · v1.0', el('br'), this.legalLinks())),
       card,
       cond,
       el('div.showcase-label', null, el('div.t', null, spec ? spec.name : ''), el('div.s', null, `${spec ? spec.role : ''}${liv && liv.name ? ' · ' + liv.name : ''}`))
@@ -1202,7 +1202,10 @@ export class MenuScreens {
     const right = el('div.panel.scroll.interactive.col', { style: { flex: '1', padding: '18px 22px', minWidth: '0' } });
     body.appendChild(left);
     body.appendChild(right);
-    // A portal invite link carries the room of the friend who sent it
+    // A portal invite link carries the room of the friend who sent it; a party
+    // leader (instant multiplayer) gets a new room of their own
+    if (opts.room) this.mpRoom = opts.room;
+    if (opts.party) this.mpParty = opts.room;
     if (!this.mpRoom) this.mpRoom = platform.inviteParam('room') || 'public';
     const status = el('div.muted', { style: { marginTop: '10px', fontSize: '13px', minHeight: '18px' } }, mp.connected ? `Connected — room “${mp.room}”` : mp.reconnecting ? 'Reconnecting…' : 'Not connected');
     const nameIn = el('input', { type: 'text', name: 'pilot-name', maxLength: 24 });
@@ -1223,7 +1226,8 @@ export class MenuScreens {
       clear(roomsBox);
       roomsBox.appendChild(el('span.muted', { style: { fontSize: '13px' } }, 'Checking…'));
       try {
-        const list = await mp.listRooms(mp.defaultUrl());
+        // Party rooms (instant multiplayer) are private: friends join by invite
+        const list = (await mp.listRooms(mp.defaultUrl())).filter((r) => !/^party-/.test(r.name) || r.name === mp.room);
         clear(roomsBox);
         if (!list.length) roomsBox.appendChild(el('span.muted', { style: { fontSize: '13px' } }, 'No one is flying yet — be the first'));
         for (const r of list.sort((a, b) => b.players - a.players))
@@ -1279,6 +1283,7 @@ export class MenuScreens {
     actions.appendChild(button('Choose aircraft & fly', () => this.ui.showScreen('freeflight'), mp.connected ? 'primary' : ''));
     left.appendChild(actions);
     left.appendChild(status);
+    left.appendChild(el('div', { style: { marginTop: '12px', fontSize: '12px' } }, this.legalLinks('Playing online means accepting the Terms of Use; the Privacy Policy explains what is sent')));
     // Portal invite link: friends who open it join this room
     if (platform.supportsInvites && mp.connected) {
       const linkOut = el('input', { type: 'text', readOnly: true, spellcheck: false });
@@ -1305,6 +1310,8 @@ export class MenuScreens {
       );
     }
 
+    if (this.mpParty && mp.connected && mp.room === this.mpParty)
+      right.appendChild(el('div.rankup', { style: { marginBottom: '14px' } }, 'This is your party room. Use “Invite friends” to bring your friends in, then choose an aircraft and fly — they will see you in the air.'));
     right.appendChild(el('div.section-title', null, `Pilots in this room (${mp.players.length + (mp.connected ? 1 : 0)})`));
     const pl = el('div.players-list');
     if (mp.connected) pl.appendChild(el('div.p', null, el('span', null, `${p.data.callsign} (you)`), el('span.muted', null, (g.showcaseSpec || {}).name || '')));
@@ -1581,6 +1588,14 @@ export class MenuScreens {
     cs.value = gp.callsign || '';
     cs.addEventListener('change', () => s.set('gameplay', 'callsign', cs.value.trim().toUpperCase()));
     c.appendChild(row('Radio callsign', cs, 'Leave empty to use your pilot callsign'));
+    c.appendChild(el('div.section-title', null, 'Privacy & terms'));
+    c.appendChild(this.legalLinks('What the game saves, what multiplayer sends, and the rules for playing'));
+  }
+
+  // "Privacy Policy · Terms of Use" links that open the in-game legal texts
+  legalLinks(prefix = '') {
+    const link = (label, tab) => el('button.legal-link', { type: 'button', onclick: () => this.ui.showLegal(tab) }, label);
+    return el('div.legal-links', null, prefix ? el('span', null, prefix + ' — ') : null, link('Privacy Policy', 'privacy'), el('span', null, ' · '), link('Terms of Use', 'terms'));
   }
 
   // =================================================================== EXIT
