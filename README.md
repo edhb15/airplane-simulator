@@ -37,14 +37,14 @@ GitHub Pages only hosts static files, so online multiplayer needs the server bel
 The game can be published on [CrazyGames](https://developer.crazygames.com). A separate build includes the CrazyGames HTML5 SDK (v3); the normal build and GitHub Pages are unaffected.
 
 ```bash
-npm run package:crazygames   # builds dist-crazygames/ and writes skyward-crazygames.zip
+npm run build:crazygames     # writes dist-crazygames/index.html
 ```
 
-Upload `skyward-crazygames.zip` (index.html is at the root of the archive, about 0.7 MB) in the CrazyGames developer portal as an HTML5 game. The *CrazyGames package* workflow also builds it on every push to `main`: open the run in the Actions tab and download the `skyward-crazygames` artifact (GitHub zips it for you). To bake in a multiplayer server, set the `MP_SERVER_URL` repository variable described below.
+The CrazyGames build is a **single self-contained `index.html`** (about 1.7 MB): the game code, styles, fonts and terrain worker are all inside it. Upload that one file in the CrazyGames developer portal as an HTML5 game. Don't upload the project's source code — browsers can't run it directly. `npm run package:crazygames` also wraps it in `skyward-crazygames.zip` for portals that want a zip. The *CrazyGames package* workflow builds it on every push to `main`: open the run in the Actions tab and download the `skyward-crazygames` artifact (GitHub zips it; the `index.html` inside is the file to upload). To bake in a multiplayer server, set the `MP_SERVER_URL` repository variable described below.
 
 To try it locally with the SDK's local test mode (demo ads, logged SDK calls): `npm run dev:crazygames`.
 
-The CrazyGames build loads as one classic script with the CSS and the terrain worker built in, so it also runs when a portal serves it from a CDN or inside a sandboxed frame. If the game can't start (for example, the source code was uploaded instead of the built zip, or a file is missing), the loading screen names the file that failed instead of staying blank.
+Because the build is one file with no module scripts or separate assets, it also runs when a portal serves it from a CDN or inside a sandboxed frame. If the game can't start (for example, the source code was uploaded instead of the built zip, or a file is missing), the loading screen names the file that failed instead of staying blank.
 
 What the CrazyGames build does (see `src/platform/platform.js`):
 
