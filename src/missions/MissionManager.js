@@ -431,6 +431,8 @@ export class MissionManager {
         return `Fly through the rings (${this.rings ? this.rings.filter((r) => r.passed).length : 0}/${this.rings ? this.rings.length : 0})`;
       case 'destroy':
         return `Shoot down the target drones (${Math.min(o.count, this.game.combat ? this.game.combat.kills : 0)}/${o.count})`;
+      case 'demolish':
+        return `Destroy buildings (${Math.min(o.count, this.game.combat ? this.game.combat.buildingsDestroyed : 0)}/${o.count})`;
       default:
         return o.type;
     }
@@ -445,6 +447,8 @@ export class MissionManager {
         return !fm.wow && fm.agl > 15;
       case 'destroy':
         return !!this.game.combat && this.game.combat.kills >= o.count;
+      case 'demolish':
+        return !!this.game.combat && this.game.combat.buildingsDestroyed >= o.count;
       case 'land': {
         const td = this.touchdown;
         if (!td || !fm.wow || fm.groundTime < 1.5) return false;
@@ -547,18 +551,31 @@ export class MissionManager {
       this.stepHold += dt;
       ok = this.stepHold > s.hold;
     } else if (!ok) this.stepHold = 0;
-    if (ok) {
-      if (s.final) {
-        if (!this.done) this.finish(true);
-        return;
-      }
-      this.stepIndex++;
-      this.stepTime = 0;
-      this.stepHold = 0;
-      this.stepState = {};
-      game.audio.chime('mission');
-      game.ui.tutorialStep(steps[this.stepIndex], this.stepIndex, steps.length);
+    if (ok) this.advanceTutorial();
+  }
+
+  advanceTutorial() {
+    const steps = this.mission.steps;
+    const s = steps[this.stepIndex];
+    if (!s) return;
+    if (s.final) {
+      if (!this.done) this.finish(true);
+      return;
     }
+    this.stepIndex++;
+    this.stepTime = 0;
+    this.stepHold = 0;
+    this.stepState = {};
+    this.game.audio.chime('mission');
+    this.game.ui.tutorialStep(steps[this.stepIndex], this.stepIndex, steps.length);
+  }
+
+  // "Skip step" button in the lesson panel, for players who are stuck
+  skipTutorialStep() {
+    if (this.kind !== 'tutorial' || this.done || !this.mission) return;
+    const s = this.mission.steps[this.stepIndex];
+    if (!s || s.final) return;
+    this.advanceTutorial();
   }
 
   currentObjectiveText() {

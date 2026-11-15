@@ -32,6 +32,32 @@ The game must be served from the Vite build (`dist/`), not from the source files
 
 GitHub Pages only hosts static files, so online multiplayer needs the server below running somewhere else.
 
+### CrazyGames
+
+The game can be published on [CrazyGames](https://developer.crazygames.com). A separate build includes the CrazyGames HTML5 SDK (v3); the normal build and GitHub Pages are unaffected.
+
+```bash
+npm run package:crazygames   # builds dist-crazygames/ and writes skyward-crazygames.zip
+```
+
+Upload `skyward-crazygames.zip` (index.html is at the root of the archive, about 0.7 MB) in the CrazyGames developer portal as an HTML5 game. The *CrazyGames package* workflow also builds it on every push to `main`: open the run in the Actions tab and download the `skyward-crazygames` artifact (GitHub zips it for you). To bake in a multiplayer server, set the `MP_SERVER_URL` repository variable described below.
+
+To try it locally with the SDK's local test mode (demo ads, logged SDK calls): `npm run dev:crazygames`.
+
+What the CrazyGames build does (see `src/platform/platform.js`):
+
+| SDK feature | Used for |
+| --- | --- |
+| `game.loadingStart` / `loadingStop` | Initial loading and the scenery loading before each flight |
+| `game.gameplayStart` / `gameplayStop` | Flying vs. menus, pause, crash and debrief screens |
+| `game.happytime` | Mission or lesson passed, promotion |
+| `ad.requestAd('midgame')` | Between flights only (when starting another flight), at most every 3 minutes; the game is muted while the ad plays |
+| `game.settings` (`muteAudio`, `disableChat`) | Mutes all sound and speech; hides multiplayer chat |
+| `data` | Progress and settings are saved to the player's CrazyGames account (with localStorage as a fallback) |
+| `game.inviteLink` / `getInviteParam` | *Invite friends* button in Multiplayer; an invite link opens the right room |
+
+Portal rules handled by the build: no Exit button, no "leave this page?" prompt, arrow keys and Space never scroll the page, no external links, fonts bundled with the game (no third-party requests besides the SDK and the optional multiplayer server). If the SDK is blocked (e.g. by an ad blocker), the game still runs normally.
+
 ### Multiplayer server
 
 `server/server.js` is a small WebSocket relay: pilots in the same room see each other's aircraft and chat. It has no database and needs no configuration, so any Node.js host works. The game finds it through the `MP_SERVER_URL` repository variable (baked into the Pages build), a `?server=` link, or the address a player types in the Multiplayer screen.
@@ -70,8 +96,8 @@ Endpoints: `/ws` (WebSocket), `/health` (status JSON) and `/rooms` (open rooms a
 | Meridian MJ-320 | Commercial | Narrow-body fly-by-wire airliner with envelope protection and autoland |
 | Vireo RJ-900 | Commercial | Regional jet |
 | Meridian MW-350 | Commercial | Long-haul wide-body twinjet |
-| Talon FX-16 | Fighter | Fly-by-wire fighter, afterburner, 9 g limiter, HUD and radar MFD, 20 mm rotary cannon (510 rounds) |
-| Tempest EF-2 | Fighter | Canard-delta air superiority fighter, 27 mm revolver cannon (150 heavier rounds) |
+| Talon FX-16 | Fighter | Fly-by-wire fighter, afterburner, 9 g limiter, HUD and radar MFD, 20 mm rotary cannon (510 rounds), 4 missiles, 4 bombs |
+| Tempest EF-2 | Fighter | Canard-delta air superiority fighter, 27 mm revolver cannon (150 heavier rounds), 6 missiles, 2 bombs |
 | Titan T-74F | Cargo | Heavy four-engine freighter |
 | Mule CT-130 | Cargo | Four-turboprop tactical transport |
 
@@ -99,7 +125,8 @@ Four aircraft (one per category) are available from the start; the rest are boug
 ### Game modes
 - **Free Flight** — any owned aircraft, any airport, gate/runway/final approach/in-flight start, time, weather, wind, fuel and payload, optional GPS destination.
 - **Career Mode** — a job board of passenger and cargo flights from your current base, paid by landing quality, passenger comfort and punctuality. Seven pilot ranks, a logbook and statistics.
-- **Missions** — 21 missions in six categories: passenger, cargo, emergency landings (engine failure, fire, glider, gear failure, fuel leak), search & rescue (find and supply drops), long-distance and military (gunnery range, canyon rings, intercept, air show).
+- **Missions** — 22 missions in six categories: passenger, cargo, emergency landings (engine failure, fire, glider, gear failure, fuel leak), search & rescue (find and supply drops), long-distance and military (gunnery range, demolition run, canyon rings, intercept, air show).
+- **Tutorial** — new players are offered a 3-minute guided first flight (take off, climb, level off, turn, cameras, map and pause) on their first visit. It leads the main menu until it is passed and stays available in Flight School. Every lesson step has a *Skip step* button.
 - **Flight School** — six interactive lessons from basic controls to ILS autoland and fighter handling, plus a pilot handbook.
 - **Multiplayer** — fly with other pilots in shared rooms with chat; other aircraft appear in the world, on the map, the navigation display and TCAS. A *Local* mode links several browser tabs without a server.
 
@@ -107,11 +134,15 @@ Four aircraft (one per category) are available from the start; the rest are boug
 - AI airliners, business jets, cargo and GA traffic push back, taxi along the taxiway network, take off, fly between airports, fly circuits, land and park at gates.
 - ATC radio menu (Tab) with spoken replies: pushback and taxi with a green taxi-route line, takeoff and landing clearances, ATIS, ILS/visual approach vectors, altitude changes, direct-to, flight following and emergencies.
 
-### Fighter guns & target practice
+### Fighter weapons & destructible cities
 - Both fighters carry a cannon. Rounds are simulated individually: launched at muzzle velocity plus the jet's own speed, slowed by drag and pulled down by gravity, and drawn as glowing tracers. Impacts kick up dust on the ground and splashes on water; hits throw sparks.
 - The cockpit HUD gunsight shows where your rounds will be, gravity drop included, with a range arc when a target is on the gun line. In the external views a matching reticle is drawn, and targets within 8 km get boxes with their range.
 - The guns only fire when airborne. Land and stop for a few seconds to rearm.
 - **Target drones:** fly the *Gunnery Range* mission (shoot down five drones, then land at Ironwood) or choose *Spawn target drones* in the pause menu during a free flight in a fighter. Drones also show on the radar and the map.
+- **Missiles** (`R`, gamepad B): each fighter carries them on the wingtip rails and outboard pylons. The seeker locks onto a drone or another pilot's fighter near the nose: a dashed diamond while tracking, then **LOCK** with a fast tone. The missile flies a lead-pursuit course with a proximity fuse. With no air target it flies to the building or ground point under the nose (the square on the HUD).
+- **Bombs** (`J`, gamepad X): free-fall bombs on the inboard pylons. The HUD shows where a bomb released now would land (CCIP circle at the end of the fall line, with the time of fall).
+- **Destructible buildings:** cannon rounds, missiles and bombs damage city buildings. Destroyed towers snap and topple, and can bring down the buildings they fall on. Houses tip over and crumble, with flying debris, rolling dust, and fires and smoke columns over the rubble. The city is rebuilt for every flight; the *Demolition Run* mission asks for twelve buildings.
+- Missiles and bombs reload with the cannon when you land and stop. `R` and `J` stay thrust reversers and supply drops in other aircraft. Destruction is local to each player in multiplayer.
 - **Multiplayer dogfights:** pilots flying fighters can shoot each other down. Hits are announced to the target, and a shoot-down is announced to the room. Airliners, private and cargo aircraft, and the AI traffic can't be damaged.
 
 ### Cameras
@@ -142,6 +173,7 @@ All keys can be rebound in *Settings → Key bindings*. Press `` ` `` or F10 in 
 | Speed brakes, arm ground spoilers | / |
 | Thrust reversers | R |
 | Fire cannon (fighters, hold) | Space |
+| Fire missile / drop bomb (fighters) | R / J |
 | Autopilot / autothrottle | Z / X |
 | Engine auto-start | I |
 | Lights: landing / nav / strobe | L / N / O |
@@ -152,7 +184,7 @@ All keys can be rebound in *Settings → Key bindings*. Press `` ` `` or F10 in 
 | Simulation rate | T faster · Y slower |
 | Pause menu | Esc or P |
 
-**Gamepad** (standard mapping): left stick pitch/roll, LT/RT throttle, LB/RB rudder, A brakes on the ground / fire cannon in the air, B/X flaps, Y gear, D-pad trim/autopilot/map, right stick look. **Joysticks and HOTAS** are detected automatically (the trigger brakes on the ground and fires the cannon in the air); map the pitch, roll, rudder and throttle axes in *Settings → Controls*. **Mouse yoke** flying can be enabled in the same place.
+**Gamepad** (standard mapping): left stick pitch/roll, LT/RT throttle, LB/RB rudder, A brakes on the ground / fire cannon in the air, B/X flaps (in a fighter in the air: B missile, X bomb), Y gear, D-pad trim/autopilot/map, right stick look. **Joysticks and HOTAS** are detected automatically (the trigger brakes on the ground and fires the cannon in the air); map the pitch, roll, rudder and throttle axes in *Settings → Controls*. **Mouse yoke** flying can be enabled in the same place.
 
 ## First flight in an airliner
 
@@ -177,9 +209,10 @@ src/
   audio/      procedural sound engine
   camera/     camera modes
   ui/         menus, HUD, map, styles
+  platform/   web portal integration (CrazyGames SDK)
 server/       static file + WebSocket relay server
 tests/        flight-model tests (vitest)
-tools/        headless test and debugging scripts
+tools/        headless test, debugging and packaging scripts
 dev/          model and world viewers for development
 ```
 
@@ -188,6 +221,8 @@ dev/          model and world viewers for development
 ```bash
 npm test                         # flight model, cannon ballistics and the multiplayer server
 node tools/flows.mjs             # in-browser smoke test of all missions, tutorials, career, ATC, crash/debrief, multiplayer
+node tools/quickstartTest.mjs    # flies the new-player tutorial end to end with real key presses
+node tools/weaponsTest.mjs       # cannon, bombs and missiles against buildings and drones, city reset
 node tools/e2e.mjs               # menus + a flight with screenshots (needs the dev server and Playwright)
 node tools/views.mjs URL out mj320,k172 cockpit,cabin   # camera view screenshots
 node tools/autolandTest.mjs      # headless autoland runs for the airliners

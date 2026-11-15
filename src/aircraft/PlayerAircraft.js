@@ -12,6 +12,7 @@ import { AIRPORT_INFO, nearestAirport, bestRunwayEnd } from '../world/airportGeo
 import { KT, FT, FPM, DEG } from '../physics/atmosphere.js';
 import { fmtTime, fmtDuration } from '../core/format.js';
 import { GunSystem } from '../combat/Guns.js';
+import { WeaponSystem } from '../combat/Ordnance.js';
 
 const ND_AIRPORTS = AIRPORT_INFO.map((a) => ({
   icao: a.icao,
@@ -62,6 +63,9 @@ export class PlayerAircraft {
     this.interiorShadow = false;
     // Fighters carry a cannon
     this.gun = spec.gun ? new GunSystem(this, spec.gun) : null;
+    // ...and missiles and bombs on wing pylons
+    this.weapons = spec.stores ? new WeaponSystem(this, spec.stores) : null;
+    this.blastShake = 0;
     this.damage = 0;
     this.lastHitToast = 0;
     // Fighters: the pilot sits above the hull line, so the cockpit tub is cut out of the
@@ -111,6 +115,7 @@ export class PlayerAircraft {
 
   dispose() {
     if (this.gun) this.gun.dispose();
+    if (this.weapons) this.weapons.dispose();
     this.game.scene.remove(this.visual.root);
     this.visual.dispose();
     this.cockpit.dispose();
@@ -230,6 +235,7 @@ export class PlayerAircraft {
 
     sim.update(dt);
     if (this.gun && game.combat) this.gun.update(dt, !!ax.trigger, game.combat.bullets, game.combat.targets());
+    if (this.weapons && game.combat) this.weapons.update(dt, game.combat.targets());
 
     // Visual transform
     const root = this.visual.root;
@@ -280,6 +286,10 @@ export class PlayerAircraft {
       this.touchShake = Math.max(0, this.touchShake - dt * 3);
     }
     if (this.gun && this.gun.firing) shake += this.spec.gun.rate > 60 ? 0.35 : 0.5;
+    if (this.blastShake > 0) {
+      shake += this.blastShake;
+      this.blastShake = Math.max(0, this.blastShake - dt * 2.5);
+    }
     this.shakeAmount = shake;
 
     // Events
@@ -535,5 +545,23 @@ export class PlayerAircraft {
       d.gun = d.gun || {};
       Object.assign(d.gun, { name: this.spec.gun.name, armed: g.armed, ammo: g.ammo, rounds: this.spec.gun.rounds, firing: g.firing, pipX: g.sight.x, pipY: g.sight.y, range: g.lock ? g.range : null });
     } else d.gun = null;
+    const ws = this.weapons;
+    if (ws) {
+      const x = (d.weapons = d.weapons || { lockHud: {}, groundHud: {}, ccipHud: {} });
+      x.armed = ws.armed;
+      x.missiles = ws.missiles;
+      x.missilesMax = ws.missilesMax;
+      x.bombs = ws.bombs;
+      x.bombsMax = ws.bombsMax;
+      x.lock = ws.locked ? 'lock' : ws.lock ? 'track' : ws.hasGround ? 'ground' : 'none';
+      x.lockName = ws.lock ? ws.lock.callsign || '' : '';
+      if (ws.lock) ws.hudAngles(ws.lock.getPosition(_wp), x.lockHud);
+      if (ws.hasGround) ws.hudAngles(ws.groundPoint, x.groundHud);
+      x.ccip = ws.hasCcip;
+      if (ws.hasCcip) ws.hudAngles(ws.ccip, x.ccipHud);
+      x.ccipTime = ws.ccipTime;
+    } else d.weapons = null;
   }
 }
+
+const _wp = new THREE.Vector3();

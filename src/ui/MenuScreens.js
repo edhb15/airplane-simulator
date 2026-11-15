@@ -7,12 +7,13 @@ import { AIRCRAFT, CATEGORY_NAMES, getAircraft } from '../aircraft/aircraftData.
 import { AIRCRAFT_LIVERIES, getLivery, TAIL_PATTERNS, STRIPE_STYLES } from '../aircraft/Livery.js';
 import { AIRPORT_INFO, getAirport } from '../world/airportGeometry.js';
 import { WEATHER_PRESETS, Weather } from '../world/Weather.js';
-import { MISSIONS, MISSION_CATEGORIES, TUTORIALS } from '../missions/missions.js';
+import { MISSIONS, MISSION_CATEGORIES, TUTORIALS, QUICKSTART_ID } from '../missions/missions.js';
 import { generateJobs, jobToMission } from '../missions/Career.js';
 import { normalizeServerUrl } from '../net/Multiplayer.js';
 import { RANKS } from '../core/Profile.js';
 import { GRAPHICS_PRESETS, DEFAULT_BINDINGS } from '../core/Settings.js';
 import { fmtTime, fmtMoney, fmtDuration, fmtMass, escapeHtml } from '../core/format.js';
+import { platform } from '../platform/platform.js';
 
 const WEATHER_LABELS = {
   clear: 'Clear',
@@ -55,6 +56,8 @@ export const ACTION_INFO = {
   dropSupplies: ['Drop supplies (rescue)', 'Engines & systems'],
   smoke: ['Smoke trail (air show)', 'Engines & systems'],
   fireGun: ['Fire cannon (fighters, hold)', 'Weapons'],
+  fireMissile: ['Fire missile (fighters)', 'Weapons'],
+  releaseBomb: ['Drop bomb (fighters)', 'Weapons'],
   autopilot: ['Autopilot engage/disengage', 'Autopilot'],
   autothrottle: ['Autothrottle on/off', 'Autopilot'],
   camera: ['Next camera', 'Camera'],
@@ -160,6 +163,7 @@ export class MenuScreens {
   main() {
     const g = this.game;
     const p = this.profile;
+    const quick = TUTORIALS.find((t) => t.id === QUICKSTART_ID);
     const items = [
       ['Free Flight', 'Fly anywhere with any aircraft, weather and time of day', () => this.ui.showScreen('freeflight')],
       ['Career Mode', 'Fly paid jobs, earn credits and climb the ranks', () => this.ui.showScreen('career')],
@@ -170,11 +174,15 @@ export class MenuScreens {
       ['Settings', 'Graphics, sound, controls and gameplay', () => this.ui.showScreen('settings')],
     ];
     const menu = el('div.menu');
+    // Until the quick-start tutorial is passed it leads the menu (it stays in Flight School)
+    if (quick && !p.data.tutorials[quick.id])
+      menu.appendChild(el('button.featured', { onclick: () => (g.audio.uiClick(), this.startLesson(quick)), onmouseenter: () => g.audio.uiHover() }, 'Tutorial', el('small', null, 'New here? Learn to fly in 3 minutes')));
     items.forEach(([label, sub, fn], i) => {
       if (i === 4 || i === 6) menu.appendChild(el('div.sep'));
       menu.appendChild(el('button', { onclick: () => (g.audio.uiClick(), fn()), onmouseenter: () => g.audio.uiHover() }, label, el('small', null, sub)));
     });
-    menu.appendChild(el('button', { onclick: () => this.ui.confirmExit() }, 'Exit', el('small', null, 'Leave the simulator')));
+    // Web portals do not allow an Exit button (the portal page owns the tab)
+    if (platform.allowExit) menu.appendChild(el('button', { onclick: () => this.ui.confirmExit() }, 'Exit', el('small', null, 'Leave the simulator')));
 
     const rank = p.rank;
     const next = p.nextRank;
@@ -532,7 +540,7 @@ export class MenuScreens {
       ['Wingspan', `${a.wing.span.toFixed(1)} m`],
       ['Cockpit', { airliner: 'Glass, fly-by-wire', ga: 'Analog gauges', fighter: 'HUD & MFDs' }[a.cockpit] || a.cockpit],
       ['Autopilot', a.autopilot.autoland ? 'With autoland' : a.autopilot.athr ? 'With autothrottle' : 'Basic'],
-      ...(a.gun ? [['Armament', `${a.gun.name}, ${a.gun.rounds} rds`]] : []),
+      ...(a.gun ? [['Armament', `${a.gun.name}, ${a.gun.rounds} rds${a.stores ? ` · ${a.stores.missiles} missiles · ${a.stores.bombs} bombs` : ''}`]] : []),
     ];
     for (const [k, v] of specs) grid.appendChild(el('div', null, el('span', null, k), el('b', null, v)));
     detail.appendChild(grid);
@@ -1161,24 +1169,27 @@ export class MenuScreens {
       el(
         'div.actions',
         null,
-        button('Start lesson', () => {
-          this.game.startFlight({
-            aircraftId: t.aircraft,
-            livery: this.profile.liveryFor(t.aircraft),
-            mission: t,
-            tutorial: true,
-            airport: t.start.airport,
-            time: t.time ?? 11,
-            weather: t.weather || 'clear',
-            wind: t.wind,
-            fuel: 0.55,
-            camera: t.aircraft === 'fx16' ? 'chase' : 'cockpit',
-            callsign: this.callsign(spec),
-          });
-        }, 'primary')
+        button('Start lesson', () => this.startLesson(t), 'primary')
       )
     );
     this.game.setupMenuScene(t.aircraft, this.profile.liveryFor(t.aircraft));
+  }
+
+  startLesson(t) {
+    const spec = getAircraft(t.aircraft);
+    this.game.startFlight({
+      aircraftId: t.aircraft,
+      livery: this.profile.liveryFor(t.aircraft),
+      mission: t,
+      tutorial: true,
+      airport: t.start.airport,
+      time: t.time ?? 11,
+      weather: t.weather || 'clear',
+      wind: t.wind,
+      fuel: 0.55,
+      camera: t.camera || (t.aircraft === 'fx16' ? 'chase' : 'cockpit'),
+      callsign: this.callsign(spec),
+    });
   }
 
   // =================================================================== MULTIPLAYER
@@ -1191,7 +1202,19 @@ export class MenuScreens {
     const right = el('div.panel.interactive.col', { style: { flex: '1', padding: '18px 22px', minWidth: '0' } });
     body.appendChild(left);
     body.appendChild(right);
-    const cfg = (this.mpCfg = this.mpCfg || { mode: mp.defaultUrl() ? 'server' : 'local', url: mp.defaultUrl(), room: 'public' });
+    if (!this.mpCfg) {
+      // A portal invite link carries the room (and server) of the friend who sent it
+      const invRoom = platform.inviteParam('room');
+      let invServer = '';
+      try {
+        invServer = normalizeServerUrl(platform.inviteParam('server') || '');
+      } catch {
+        invServer = '';
+      }
+      const url = invServer || mp.defaultUrl();
+      this.mpCfg = { mode: url ? 'server' : 'local', url, room: invRoom || 'public' };
+    }
+    const cfg = this.mpCfg;
     const status = el('div.muted', { style: { marginTop: '10px', fontSize: '13px' } }, mp.connected ? `Connected — room “${mp.room}”` : 'Not connected');
     const nameIn = el('input', { type: 'text', name: 'pilot-name', maxLength: 24 });
     nameIn.value = p.data.name;
@@ -1206,7 +1229,7 @@ export class MenuScreens {
     left.appendChild(row('Callsign', csIn));
     left.appendChild(el('div.section-title', null, 'Session'));
     urlIn.placeholder = 'wss://your-server.onrender.com/ws';
-    const urlRow = row('Server address', urlIn, mp.staticHost ? 'The multiplayer server you deployed (see the README), e.g. your-server.onrender.com' : 'Run “npm run server” to host one');
+    const urlRow = row('Server address', urlIn, platform.isCrazyGames ? 'The Skyward multiplayer server address' : mp.staticHost ? 'The multiplayer server you deployed (see the README), e.g. your-server.onrender.com' : 'Run “npm run server” to host one');
     // Rooms open on the server
     const roomsBox = el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' } });
     const roomsRow = row('Open rooms', roomsBox, 'Click a room to join it');
@@ -1297,12 +1320,46 @@ export class MenuScreens {
     }, mp.connected ? 'danger' : 'primary');
     left.appendChild(el('div', { style: { display: 'flex', gap: '10px', marginTop: '16px' } }, connectBtn, button('Choose aircraft & fly', () => this.ui.showScreen('freeflight'), mp.connected ? 'primary' : '')));
     left.appendChild(status);
+    // Portal invite link: friends who open it join this room on this server
+    if (platform.supportsInvites && mp.connected && mp.mode === 'server') {
+      const linkOut = el('input', { type: 'text', readOnly: true, spellcheck: false });
+      linkOut.classList.add('hidden');
+      left.appendChild(
+        el(
+          'div',
+          { style: { marginTop: '12px' } },
+          button('Invite friends', async () => {
+            let server = '';
+            try {
+              server = new URL(mp.lastArgs ? mp.lastArgs.url : cfg.url).host;
+            } catch {
+              server = '';
+            }
+            const link = platform.inviteLink(server ? { room: mp.room, server } : { room: mp.room });
+            if (!link) return this.ui.toast('Invite links are not available right now', 'warn');
+            linkOut.value = link;
+            linkOut.classList.remove('hidden');
+            linkOut.select();
+            try {
+              await navigator.clipboard.writeText(link);
+              this.ui.toast('Invite link copied — send it to your friends', 'info');
+            } catch {
+              this.ui.toast('Copy the invite link below and send it to your friends', 'info');
+            }
+          }, 'small'),
+          linkOut
+        )
+      );
+    }
     left.appendChild(el('div.section-title', null, 'How it works'));
+    const howTo = platform.isCrazyGames
+      ? 'Online: everyone on the same server and room flies together — use “Invite friends” after connecting to send a link to your room. A sleeping server takes up to a minute to wake. Local: open the game in several browser tabs on this computer.'
+      : 'Online: everyone connects to the same multiplayer server and joins the same room — share a link with ?server=<address> so friends land on the right server. A free hosted server falls asleep when nobody is flying and takes up to a minute to wake. Local: open the simulator in several browser tabs on this computer.';
     left.appendChild(
       el(
         'p.muted',
         { style: { fontSize: '13px', lineHeight: '1.55' } },
-        'Online: everyone connects to the same multiplayer server and joins the same room — share a link with ?server=<address> so friends land on the right server. A free hosted server falls asleep when nobody is flying and takes up to a minute to wake. Local: open the simulator in several browser tabs on this computer. In flight press Enter to chat; other pilots appear in the world, on your map, navigation display and TCAS.'
+        `${howTo} ${platform.chatDisabled ? 'Other pilots' : 'In flight press Enter to chat; other pilots'} appear in the world, on your map, navigation display and TCAS.`
       )
     );
 
@@ -1312,6 +1369,10 @@ export class MenuScreens {
     for (const pi of mp.players) pl.appendChild(el('div.p', null, el('span', null, `${pi.callsign || ''} ${pi.name ? '· ' + pi.name : ''}`), el('span.muted', null, getAircraft(pi.aircraft).name)));
     if (!mp.connected) pl.appendChild(el('div.muted', { style: { fontSize: '13px' } }, 'Connect to see other pilots.'));
     right.appendChild(pl);
+    if (platform.chatDisabled) {
+      this.mpLog = null;
+      return node;
+    }
     right.appendChild(el('div.section-title', null, 'Chat'));
     const log = el('div.chat-log.scroll');
     for (const m of this.ui.chatHistory) log.appendChild(this.chatLine(m));
@@ -1620,6 +1681,7 @@ const HANDBOOK = [
   ['Air traffic control', 'Press <kbd>Tab</kbd> for the radio menu. At the gate request pushback and taxi, follow the green taxi line to the holding point, report ready and wait for takeoff clearance. Inbound, request an approach — ATC gives vectors and landing clearance.'],
   ['Weather & navigation', 'The navigation display shows your route in magenta, other traffic and storm cells from the weather radar. Avoid red cells — they bring heavy turbulence and downdrafts. Crosswind landings need rudder to align with the runway just before touchdown.'],
   ['Fighter guns', 'Hold <kbd>Space</kbd> (gamepad <kbd>A</kbd>, joystick trigger) to fire the cannon once airborne. Put the gunsight pipper on the target — it shows where your rounds will be, gravity drop included, and a range arc when a target is on the gun line. Land and stop to rearm. Spawn target drones from the pause menu in Free Flight, or fly the Gunnery Range mission.'],
+  ['Missiles & bombs', 'Fighters carry missiles and bombs on the wings. <kbd>R</kbd> (gamepad <kbd>B</kbd>) fires a missile: it locks onto an aircraft or drone near the nose (dashed diamond, then <b>LOCK</b> with a fast tone); with no air target it flies to the building or ground under the nose (the small square). <kbd>J</kbd> (gamepad <kbd>X</kbd>) drops a bomb: the circle at the end of the fall line shows where it will land. Cannon fire, missiles and bombs bring buildings down — tall ones snap and topple onto their neighbours. Land and stop to rearm; the city is rebuilt for every flight. Try the Demolition Run mission.'],
   ['Cameras', '<kbd>1</kbd> cockpit · <kbd>2</kbd> cabin · <kbd>3</kbd> external · <kbd>4</kbd> wing · <kbd>5</kbd> cinematic · <kbd>6</kbd> tower · <kbd>7</kbd> fly-by. <kbd>C</kbd> cycles. Right-drag to look around, scroll to zoom. In the cockpit click switches and scroll over knobs.'],
 ];
 

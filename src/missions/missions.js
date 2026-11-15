@@ -443,6 +443,27 @@ export const MISSIONS = [
     reward: { credits: 8500, xp: 600 },
   },
   {
+    id: 'mil-demolition',
+    category: 'military',
+    title: 'Demolition Run',
+    difficulty: 2,
+    requiredRank: 0,
+    aircraft: ['fx16', 'ef2'],
+    briefing:
+      'The old quarter of Ironwood has been evacuated and is due for demolition — the air force has been asked to do it. Bring down twelve buildings with bombs (J), missiles (R) and the cannon (Space), then land at Ironwood. The circle on the HUD shows where a bomb will land; a missile flies to the square under your nose. Buildings that collapse onto their neighbours count too.',
+    start: { air: { x: 64000, z: 9000, altFt: 4500, heading: 0, kt: 360 } },
+    destination: 'AXIW',
+    route: [{ id: 'TOWN', name: 'Ironwood old quarter', x: 64000, z: -14000 }],
+    approach: '36',
+    time: 15,
+    weather: 'fewClouds',
+    wind: { dir: 350, speed: 4 },
+    payload: {},
+    fuel: 0.6,
+    objectives: [{ type: 'demolish', count: 12 }, { type: 'land', airport: 'AXIW' }, { type: 'stop' }],
+    reward: { credits: 9000, xp: 650 },
+  },
+  {
     id: 'mil-intercept',
     category: 'military',
     title: 'Scramble!',
@@ -496,7 +517,47 @@ export const MISSIONS = [
 const sim = (g) => g.player.sim;
 const snap = (g) => g.player.flightData;
 
+// Short first-flight tutorial offered to new players on their first visit
+export const QUICKSTART_ID = 'tut-quickstart';
+
 export const TUTORIALS = [
+  {
+    id: QUICKSTART_ID,
+    title: 'Quick Start: Your First Flight',
+    aircraft: 'k172',
+    desc: 'New here? A 3-minute guided flight: take off, climb, turn, change the view and use the map.',
+    start: { airport: 'AXPV', spawn: 'runway', runway: '22' },
+    time: 10,
+    weather: 'fewClouds',
+    wind: { dir: 220, speed: 2 },
+    assist: 'beginner',
+    camera: 'chase',
+    quick: true,
+    steps: [
+      { text: 'Welcome aboard! You are lined up on the runway in a Kestrel K-172, a forgiving trainer. Follow the instructions in this box — the next one appears with a chime as soon as you get it right.', wait: 6 },
+      { text: 'First, release the parking brake.', keys: 'K', check: (g) => !sim(g).parkingBrake },
+      { text: 'Now give it full power! Press F4 (or hold Shift to push the throttle up gradually).', keys: 'F4 / Shift', check: (g) => sim(g).throttleLever > 0.95 },
+      { text: 'You are rolling. Steer with Q / E to stay on the centre line. At 55 knots on the speed readout, hold S (or ↓) to lift the nose — just like pulling back on a real control stick.', keys: 'S / ↓', check: (g) => !snap(g).onGround && snap(g).radioAlt > 30 },
+      { text: 'You are flying! Keep the nose a little above the horizon and climb to 800 ft above the ground. Too steep and you will slow down — ease off S if the speed drops below 60 knots.', check: (g) => snap(g).radioAlt > 800 },
+      { text: 'Level off: tap W (or ↑) to lower the nose until the vertical speed (V/S) is close to zero.', keys: 'W / ↑', check: (g) => Math.abs(snap(g).vs) < 400, hold: 1.5 },
+      { text: 'Turning: hold A (or ←) to bank left to about 20°. The aircraft turns as long as the wings are banked.', keys: 'A / ←', check: (g) => snap(g).bank < -18 },
+      { text: 'Now press D (or →) to roll back until the wings are level again.', keys: 'D / →', check: (g) => Math.abs(snap(g).bank) < 8, hold: 1.5 },
+      { text: 'Change your view: press 1 for the cockpit, 3 for this outside view, or C to cycle through every camera. Right-drag the mouse to look around.', keys: '1 / 3 / C', check: (g, t, st) => {
+        const m = g.cameras.mode;
+        if (st.mode0 === undefined) st.mode0 = m;
+        return m !== st.mode0;
+      } },
+      { text: 'Open the map with M to see where you are and the airports around you. Press M again (or Esc) to close it.', keys: 'M', check: (g, t, st) => {
+        if (g.ui.map.open) st.opened = true;
+        return !!st.opened && !g.ui.map.open;
+      } },
+      { text: 'Last one: press Esc (or P) to pause. The pause menu has the controls list, settings and restart. Press Esc again to resume.', keys: 'Esc / P', check: (g, t, st) => {
+        if (st.p0 === undefined) st.p0 = g.pauseCount;
+        return g.pauseCount > st.p0 && !g.paused;
+      } },
+      { text: 'Great flying — you have the basics! Next, learn to land in Flight School, or jump into Missions and Free Flight. More controls: press ` (backquote) or F10 at any time.', wait: 7, final: true },
+    ],
+  },
   {
     id: 'tut-basics',
     title: '1. Basic Flight Controls',
@@ -624,7 +685,9 @@ export const TUTORIALS = [
         return st.up && st.inverted && Math.abs(snap(g).pitch) < 20 && Math.abs(snap(g).bank) < 30;
       } },
       { text: 'Weapons: hold Space (gamepad A, joystick trigger) to fire the cannon. Watch the tracers, the gunsight pipper and the ammunition counter on the HUD.', keys: 'Space', check: (g) => !!g.player.gun && g.player.gun.fired >= 40 },
-      { text: 'Outstanding flying! Try the Gunnery Range, Canyon Run and Scramble missions next.', wait: 5, final: true },
+      { text: 'Missiles: press R (gamepad B) to fire one. A missile locks onto an aircraft or drone near the nose (diamond, then LOCK). With no air target it flies to the spot under the nose — the small square on the HUD.', keys: 'R', check: (g) => !!g.player.weapons && g.player.weapons.fired.missiles >= 1 },
+      { text: 'Bombs: press J (gamepad X) to drop one. The circle on the HUD at the end of the line from the flight path marker is where it will land — put it on the target, then release.', keys: 'J', check: (g) => !!g.player.weapons && g.player.weapons.fired.bombs >= 1 },
+      { text: 'Outstanding flying! Try the Gunnery Range, Demolition Run, Canyon Run and Scramble missions next — or fly over a city in Free Flight. Land and stop to rearm.', wait: 6, final: true },
     ],
   },
 ];

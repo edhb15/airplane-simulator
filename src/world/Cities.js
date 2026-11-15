@@ -1,6 +1,7 @@
 // Procedural cities: street grids with skyscraper cores, mid-rise districts and
 // suburbs. Buildings are instanced boxes with a world-space window facade that
-// lights up at night, street lights are glow points. Provides collision queries.
+// lights up at night, street lights are glow points. Provides collision and
+// ray queries, and lets buildings be hidden when they are destroyed.
 
 import * as THREE from 'three';
 import { CITIES } from './worldData.js';
@@ -170,9 +171,6 @@ export class Cities {
       tiles.get(key).lights.push(l);
     }
     const m4 = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const s = new THREE.Vector3();
-    const p = new THREE.Vector3();
     const col = new THREE.Color();
     for (const [key, t] of tiles) {
       const [tx, tz] = key.split(':').map(Number);
@@ -184,10 +182,11 @@ export class Cities {
         const im = new THREE.InstancedMesh(this.box, this.material, t.buildings.length);
         let maxH = 0;
         t.buildings.forEach((b, i) => {
-          q.setFromAxisAngle(_up, -b.rot);
-          p.set(b.x - cx, b.y, b.z - cz);
-          s.set(b.w, b.h, b.d);
-          m4.compose(p, q, s);
+          b.mesh = im;
+          b.index = i;
+          b.tx = cx;
+          b.tz = cz;
+          this.buildingMatrix(b, m4);
           im.setMatrixAt(i, m4);
           im.setColorAt(i, col.setRGB(b.tint[0], b.tint[1], b.tint[2]));
           maxH = Math.max(maxH, b.y + b.h);
@@ -210,7 +209,120 @@ export class Cities {
     }
   }
 
+  // Instance matrix of a building inside its tile group
+  buildingMatrix(b, out) {
+    _q.setFromAxisAngle(_up, -b.rot);
+    _p.set(b.x - b.tx, b.y, b.z - b.tz);
+    _s.set(b.w, b.h, b.d);
+    return out.compose(_p, _q, _s);
+  }
+
+  // Destroyed buildings: hide the instance and stop colliding with it
+  hideBuilding(b) {
+    if (!b.mesh || b.destroyed) return;
+    b.destroyed = true;
+    b.mesh.setMatrixAt(b.index, _m4.makeScale(0, 0, 0));
+    b.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  showBuilding(b) {
+    if (!b.mesh) return;
+    b.destroyed = false;
+    b.mesh.setMatrixAt(b.index, this.buildingMatrix(b, _m4));
+    b.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  // Buildings whose collision cells touch the box around (x, z) +- r
+  *candidates(x0, z0, x1, z1) {
+    const k0 = Math.floor(Math.min(x0, x1) / 100),
+      k1 = Math.floor(Math.max(x0, x1) / 100);
+    const l0 = Math.floor(Math.min(z0, z1) / 100),
+      l1 = Math.floor(Math.max(z0, z1) / 100);
+    if ((k1 - k0 + 1) * (l1 - l0 + 1) > 400) return;
+    const seen = this._seen || (this._seen = new Set());
+    seen.clear();
+    for (let i = k0; i <= k1; i++)
+      for (let j = l0; j <= l1; j++) {
+        const list = this.grid.get(i * 100000 + j);
+        if (!list) continue;
+        for (const b of list) {
+          if (b.destroyed || seen.has(b)) continue;
+          seen.add(b);
+          yield b;
+        }
+      }
+  }
+
+  // First building hit by the segment a -> b, or null. Returns
+  // { building, t (0..1 along the segment), point }.
+  raycast(ax, ay, az, bx, by, bz, out = {}) {
+    if (Math.min(ay, by) > this.maxTop) return null;
+    let best = null,
+      bestT = 2;
+    for (const bd of this.candidates(ax, az, bx, bz)) {
+      if (Math.min(ay, by) > bd.y + bd.h) continue;
+      // Slab test in the building's local frame (x along width, z along depth)
+      const c = Math.cos(bd.rot),
+        s = Math.sin(bd.rot);
+      const ox = ax - bd.x,
+        oz = az - bd.z;
+      const dx = bx - ax,
+        dy = by - ay,
+        dz = bz - az;
+      const lox = ox * c + oz * s,
+        loz = -ox * s + oz * c;
+      const ldx = dx * c + dz * s,
+        ldz = -dx * s + dz * c;
+      let t0 = 0,
+        t1 = 1;
+      const slab = (o, d, lo, hi) => {
+        if (Math.abs(d) < 1e-9) return o >= lo && o <= hi;
+        let ta = (lo - o) / d,
+          tb = (hi - o) / d;
+        if (ta > tb) [ta, tb] = [tb, ta];
+        if (ta > t0) t0 = ta;
+        if (tb < t1) t1 = tb;
+        return t0 <= t1;
+      };
+      if (!slab(lox, ldx, -bd.w / 2, bd.w / 2)) continue;
+      if (!slab(loz, ldz, -bd.d / 2, bd.d / 2)) continue;
+      if (!slab(ay, dy, bd.y, bd.y + bd.h)) continue;
+      if (t0 < bestT) {
+        bestT = t0;
+        best = bd;
+      }
+    }
+    if (!best) return null;
+    out.building = best;
+    out.t = bestT;
+    out.point = (out.point || new THREE.Vector3()).set(ax + (bx - ax) * bestT, ay + (by - ay) * bestT, az + (bz - az) * bestT);
+    return out;
+  }
+
+  // Distance from a point to the outside of a building (0 when inside)
+  distanceTo(bd, p) {
+    const c = Math.cos(bd.rot),
+      s = Math.sin(bd.rot);
+    const dx = p.x - bd.x,
+      dz = p.z - bd.z;
+    const lx = Math.max(0, Math.abs(dx * c + dz * s) - bd.w / 2);
+    const lz = Math.max(0, Math.abs(-dx * s + dz * c) - bd.d / 2);
+    const ly = p.y < bd.y ? bd.y - p.y : p.y > bd.y + bd.h ? p.y - bd.y - bd.h : 0;
+    return Math.hypot(lx, ly, lz);
+  }
+
+  // Standing buildings within r metres of p: [{ building, dist }]
+  buildingsNear(p, r) {
+    const out = [];
+    for (const bd of this.candidates(p.x - r - 60, p.z - r - 60, p.x + r + 60, p.z + r + 60)) {
+      const d = this.distanceTo(bd, p);
+      if (d <= r) out.push({ building: bd, dist: d });
+    }
+    return out;
+  }
+
   addCollider(b) {
+    this.maxTop = Math.max(this.maxTop || 0, b.y + b.h);
     const r = Math.hypot(b.w, b.d) / 2;
     const k0 = Math.floor((b.x - r) / 100),
       k1 = Math.floor((b.x + r) / 100);
@@ -230,7 +342,7 @@ export class Cities {
     const list = this.grid.get(key);
     if (!list) return null;
     for (const b of list) {
-      if (p.y > b.y + b.h + r) continue;
+      if (b.destroyed || p.y > b.y + b.h + r) continue;
       const dx = p.x - b.x,
         dz = p.z - b.z;
       const c = Math.cos(b.rot),
@@ -301,3 +413,7 @@ export class Cities {
 }
 
 const _up = new THREE.Vector3(0, 1, 0);
+const _q = new THREE.Quaternion();
+const _p = new THREE.Vector3();
+const _s = new THREE.Vector3();
+const _m4 = new THREE.Matrix4();

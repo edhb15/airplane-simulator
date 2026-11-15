@@ -188,6 +188,16 @@ export class BulletManager {
           continue;
         }
       }
+      // Buildings: own rounds damage them, other pilots' rounds just stop
+      if (this.cities && by < this.cities.maxTop + 2) {
+        const bh = this.cities.raycast(ax, ay, az, bx, by, bz, _bh);
+        if (bh) {
+          this.alive[i] = 0;
+          if (this.owner[i] === OWNER_PLAYER && this.onBuildingHit) this.onBuildingHit(bh.building, bh.point, this.dmg[i], _v.set(this.vel[k], this.vel[k + 1], this.vel[k + 2]));
+          else if (this.impactBudget-- > 0) this.effects.smoke.emit(bh.point, _b.set(0, 2, 0), { life: 1.4, size0: 1, size1: 6, alpha: 0.5, color: [0.6, 0.58, 0.55], drag: 1.5 });
+          continue;
+        }
+      }
       // Terrain and water (nothing reaches the ground above the highest peaks)
       if (by < 4200) {
         const h = terrainHeight(bx, bz);
@@ -371,3 +381,4 @@ const _qi = new THREE.Quaternion();
 const _muzzle = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const _bv = new THREE.Vector3();
+const _bh = {};

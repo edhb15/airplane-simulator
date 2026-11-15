@@ -1,9 +1,11 @@
-// Combat: rounds in flight, target drones and the list of everything that can
-// be shot (drones, plus other pilots flying fighters in multiplayer).
+// Combat: rounds, missiles and bombs in flight, explosions, destructible
+// buildings, target drones and the list of everything that can be shot
+// (drones, plus other pilots flying fighters in multiplayer).
 
 import * as THREE from 'three';
 import { BulletManager } from './Guns.js';
 import { TargetDrone } from './Drones.js';
+import { Destruction } from './Destruction.js';
 import { ParticleSystem } from '../aircraft/Effects.js';
 import { terrainHeight } from '../world/terrainGen.js';
 import { FT } from '../physics/atmosphere.js';
@@ -14,6 +16,11 @@ export class CombatManager {
     this.scene = game.scene;
     this.fx = { smoke: new ParticleSystem(game.scene, false), fire: new ParticleSystem(game.scene, true) };
     this.bullets = new BulletManager(game.scene, this.fx);
+    this.destruction = new Destruction(game, game.cities);
+    this.ordnance = [];
+    // Cannon rounds stop at buildings; the player's own rounds damage them
+    this.bullets.cities = game.cities;
+    this.bullets.onBuildingHit = (b, point, dmg, vel) => this.destruction.damage(b, dmg, point, { bullet: true, dir: vel });
     this.drones = [];
     this.kills = 0;
     this.nextDroneId = 1;
@@ -23,7 +30,49 @@ export class CombatManager {
   reset() {
     this.clearDrones();
     this.bullets.clear();
+    for (const o of this.ordnance) o.dispose();
+    this.ordnance = [];
+    this.destruction.reset();
     this.kills = 0;
+  }
+
+  get buildingsDestroyed() {
+    return this.destruction.collapsedCount;
+  }
+
+  // Bomb / missile detonation: visuals, then blast damage to buildings, air
+  // targets and (if far too close) the player
+  explode(p, { radius, damage, airDamage = 100, size = 1, direct = null, water = false, ground = false } = {}) {
+    const pos = _e.copy(p);
+    const gh = terrainHeight(pos.x, pos.z);
+    this.destruction.blast(pos, { size, water, onGround: ground || pos.y - gh < 10 });
+    if (!water) {
+      for (const { building, dist } of this.game.cities.buildingsNear(pos, radius)) this.destruction.damage(building, damage * Math.max(0.2, 1 - dist / radius), pos);
+    }
+    for (const t of this.targets()) {
+      if (t === direct) {
+        t.onHit(airDamage, pos);
+        continue;
+      }
+      t.getPosition(_t);
+      const d = _t.distanceTo(pos);
+      if (d < radius * 1.6) t.onHit(airDamage * (1 - d / (radius * 1.6)), pos);
+    }
+    const pl = this.game.player;
+    if (pl && !pl.sim.crashed) {
+      const d = pl.position.distanceTo(pos);
+      if (d < radius * 0.35 && this.game.settings.get('gameplay').crashes) pl.sim.fm.crash('Caught in the explosion');
+    }
+    this.addShake(pos, 600 * size);
+  }
+
+  // Camera shake for the player from an explosion or collapse at p
+  addShake(p, range) {
+    const pl = this.game.player;
+    if (!pl) return;
+    const d = this.game.camera.position.distanceTo(p);
+    const k = 1 - d / Math.max(1, range);
+    if (k > 0) pl.blastShake = Math.max(pl.blastShake || 0, 2.5 * k);
   }
 
   clearDrones() {
@@ -100,7 +149,12 @@ export class CombatManager {
     for (const d of this.drones) d.update(dt, this.fx);
     for (const d of this.drones.filter((x) => x.finished)) d.dispose();
     this.drones = this.drones.filter((x) => !x.finished);
-    this.bullets.update(dt, this.targets(), this.game.camera);
+    const targets = this.targets();
+    this.bullets.update(dt, targets, this.game.camera);
+    for (const o of this.ordnance) o.update(dt);
+    for (const o of this.ordnance.filter((x) => x.done)) o.dispose();
+    this.ordnance = this.ordnance.filter((x) => !x.done);
+    this.destruction.update(dt);
     this.fx.smoke.update(dt);
     this.fx.fire.update(dt);
   }
@@ -115,5 +169,8 @@ export class CombatManager {
       });
   }
 }
+
+const _e = new THREE.Vector3();
+const _t = new THREE.Vector3();
 
 export { THREE };

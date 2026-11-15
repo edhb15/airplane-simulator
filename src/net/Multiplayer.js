@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { AircraftVisual } from '../aircraft/AircraftVisual.js';
 import { getAircraft } from '../aircraft/aircraftData.js';
 import { FT, KT } from '../physics/atmosphere.js';
+import { platform } from '../platform/platform.js';
 
 const SEND_HZ = 10;
 const DELAY = 0.15;
@@ -181,7 +182,7 @@ export class Multiplayer {
   // Static hosts (GitHub Pages) cannot run the relay server: there is no default
   // server address there and the menu starts in local (browser tabs) mode
   get staticHost() {
-    return /\.github\.io$/i.test(window.location.hostname);
+    return platform.isCrazyGames || /\.github\.io$/i.test(window.location.hostname);
   }
 
   // Server address, in order of preference: ?server= in the page URL, the
@@ -558,8 +559,14 @@ export class Multiplayer {
     this.hitTimer = (this.hitTimer || 0) - dt;
     if (this.hitTimer > 0 || !this.pendingHits.size || !this.transport) return;
     this.hitTimer = 0.1;
-    for (const [id, dmg] of this.pendingHits) this.transport.send({ t: 'hit', target: id, dmg: Math.min(50, Math.round(dmg)) });
-    this.pendingHits.clear();
+    // The relay caps one message at 50 damage: bigger hits (missiles, bombs)
+    // go out over the next few flushes
+    for (const [id, dmg] of [...this.pendingHits]) {
+      const send = Math.min(50, Math.round(dmg));
+      if (send > 0) this.transport.send({ t: 'hit', target: id, dmg: send });
+      if (dmg - send >= 1) this.pendingHits.set(id, dmg - send);
+      else this.pendingHits.delete(id);
+    }
   }
 
   reportDown(byId) {

@@ -7,8 +7,10 @@ import { MenuScreens, TIPS, ACTION_INFO } from './MenuScreens.js';
 import { FlightHUD } from './FlightHUD.js';
 import { MapView } from './MapView.js';
 import { WEATHER_PRESETS } from '../world/Weather.js';
+import { TUTORIALS, QUICKSTART_ID } from '../missions/missions.js';
 import { fmtMoney, fmtDuration, fmtTime } from '../core/format.js';
 import { keyCap } from './dom.js';
+import { platform } from '../platform/platform.js';
 
 const WX_LABELS = { clear: 'Clear', fewClouds: 'Few clouds', scattered: 'Scattered', broken: 'Broken', overcast: 'Overcast', rain: 'Rain', thunderstorm: 'Storm', fog: 'Fog', snow: 'Snow' };
 
@@ -71,6 +73,8 @@ export class UIManager {
     // Multiplayer chat & status
     game.multiplayer.on((ev) => {
       if (ev.type === 'chat') {
+        // Portal setting: players can turn off chat with strangers
+        if (platform.chatDisabled && !ev.system) return;
         this.chatHistory.push(ev);
         if (this.chatHistory.length > 80) this.chatHistory.shift();
         if (this.menus.mpLog && this.menus.mpLog.isConnected) {
@@ -165,7 +169,44 @@ export class UIManager {
       setTimeout(() => this.map.prefetch(), 4000);
       const first = node.querySelector('.menu button');
       if (first) first.focus({ preventScroll: true });
+      if (!g.profile.data.onboarded && g.state === 'menu') this.showWelcome();
     }
+  }
+
+  // First visit: offer the quick-start tutorial
+  showWelcome() {
+    const g = this.game;
+    const p = g.profile;
+    const quick = TUTORIALS.find((t) => t.id === QUICKSTART_ID);
+    const done = () => {
+      p.data.onboarded = true;
+      p.persist();
+    };
+    const tip = (k, t) => el('div.wl-tip', null, el('kbd', null, k), el('span', null, t));
+    const node = el(
+      'div.modal.panel.welcome',
+      null,
+      el('div.tag.gold', { style: { alignSelf: 'flex-start' } }, 'Welcome, pilot'),
+      el('h2', { style: { marginTop: '10px' } }, 'First time in the cockpit?'),
+      el('p.muted', null, 'Take the 3-minute tutorial: you will take off, climb, turn, switch cameras and use the map, one simple step at a time.'),
+      el('div.wl-tips', null, tip('W / S', 'Nose down / up'), tip('A / D', 'Roll left / right'), tip('Shift / Ctrl', 'Throttle up / down'), tip('Esc', 'Pause menu')),
+      el(
+        'div',
+        { style: { display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '18px', flexWrap: 'wrap' } },
+        button('Skip — I can fly', () => {
+          done();
+          this.closeModal(true);
+        }, 'ghost'),
+        button('Start the tutorial', () => {
+          done();
+          this.closeModal(true);
+          if (quick) this.menus.startLesson(quick);
+        }, 'primary')
+      )
+    );
+    this.openModal(node, { kind: 'welcome', onClose: done });
+    const start = node.querySelector('button.primary');
+    if (start) start.focus({ preventScroll: true });
   }
 
   showFlight() {

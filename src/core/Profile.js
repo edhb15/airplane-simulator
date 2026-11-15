@@ -28,6 +28,7 @@ const DEFAULT = {
   stats: { flights: 0, hours: 0, landings: 0, bestLanding: null, distanceNm: 0, crashes: 0, missionsCompleted: 0, jobsCompleted: 0, earned: 0 },
   missions: {},
   tutorials: {},
+  onboarded: false,
   created: Date.now(),
 };
 
@@ -37,6 +38,8 @@ export class Profile {
     this.data = { ...DEFAULT, ...load('skyward.profile', {}) };
     this.data.stats = { ...DEFAULT.stats, ...(this.data.stats || {}) };
     if (!this.data.callsign) this.data.callsign = `SKY${Math.floor(100 + Math.random() * 899)}`;
+    // Pilots who flew before the welcome prompt existed are not new
+    if (!this.data.onboarded && this.data.logbook.length) this.data.onboarded = true;
     this.listeners = [];
   }
 

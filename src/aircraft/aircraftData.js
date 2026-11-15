@@ -386,6 +386,8 @@ export const AIRCRAFT = [
     rangeNm: 2000,
     // 20 mm six-barrel rotary cannon above the left wing root (100 rounds/s)
     gun: { name: '20 mm rotary cannon', rounds: 510, rate: 100, muzzle: 1050, damage: 34, spread: 0.004, elev: 1.0, pos: [-0.62, 0.22, -4.2] },
+    // Wing stores: missiles on the tip rails and outboard pylons, bombs inboard
+    stores: { missiles: 4, bombs: 4 },
     eye: [0, 0.78, -5.3],
     cabinEye: [0, 0.85, -4.4],
     model: {
@@ -442,6 +444,7 @@ export const AIRCRAFT = [
     rangeNm: 1800,
     // 27 mm revolver cannon in the right wing root (28 rounds/s, heavier shells)
     gun: { name: '27 mm revolver cannon', rounds: 150, rate: 28, muzzle: 1025, damage: 60, spread: 0.003, elev: 1.0, pos: [0.78, -0.22, -2.6] },
+    stores: { missiles: 6, bombs: 2 },
     eye: [0, 0.9, -6.1],
     cabinEye: [0, 0.95, -5.2],
     model: {

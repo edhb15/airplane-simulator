@@ -359,6 +359,15 @@ table.data .num { font-variant-numeric: tabular-nums; font-weight: 600; text-ali
 .tutorial .prog { height: 3px; background: rgba(255, 255, 255, 0.1); margin-top: 10px; border-radius: 2px; overflow: hidden; }
 .tutorial .prog > div { height: 100%; background: var(--accent); transition: width 0.4s; }
 .tutorial.flash { animation: tutFlash 0.6s ease; }
+.tutorial .tut-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+.tutorial .skip { background: none; border: 1px solid var(--line); color: var(--muted); font-size: 11px; letter-spacing: 0.06em; padding: 3px 9px; border-radius: 999px; }
+.tutorial .skip:hover { color: var(--text); border-color: var(--line-strong); }
+.main .menu button.featured { color: var(--accent); }
+.main .menu button.featured small { opacity: 1; max-height: 20px; }
+.welcome .wl-tips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-top: 10px; }
+.welcome .wl-tip { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #c5d3e4; }
+.welcome .wl-tip kbd { min-width: 74px; text-align: center; }
+@media (max-width: 520px) { .welcome .wl-tips { grid-template-columns: 1fr; } }
 @keyframes tutFlash { 0% { box-shadow: 0 0 0 0 rgba(242, 179, 61, 0.8); } 100% { box-shadow: 0 0 0 14px rgba(242, 179, 61, 0); } }
 
 .hud-tr { position: absolute; top: 10px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
@@ -512,3 +521,14 @@ table.data .num { font-variant-numeric: tabular-nums; font-weight: 600; text-ali
 .gun-reticle i { position: absolute; left: -2.5px; top: -2.5px; width: 5px; height: 5px; border-radius: 50%; background: rgba(80, 255, 120, 0.95); }
 .gun-reticle.locked::before { border-color: #ff5050; }
 .gun-reticle.firing::before { border-style: dashed; }
+.target-box.msl-track { border-color: #ffd23c; border-style: dashed; }
+.target-box.msl-lock { border-width: 2.5px; border-color: #ff3030; transform-origin: center; box-shadow: 0 0 12px rgba(255, 50, 50, 0.8); }
+.target-box.msl-lock::after { content: 'LOCK'; position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -3px); font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: #ff5a5a; text-shadow: 0 1px 3px #000; }
+.aim-ground { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; will-change: transform; }
+.aim-ground::before { content: ''; position: absolute; left: -11px; top: -11px; width: 18px; height: 18px; border: 2px solid rgba(255, 210, 60, 0.95); transform: rotate(45deg); box-shadow: 0 0 4px rgba(0, 0, 0, 0.6); }
+.aim-ground.building::before { border-color: #ff6a3c; }
+.aim-ground span { position: absolute; left: 14px; top: -7px; font-family: var(--font-mono); font-size: 10px; color: #ffd27a; text-shadow: 0 1px 3px #000; }
+.ccip-mark { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; will-change: transform; }
+.ccip-mark::before { content: ''; position: absolute; left: -13px; top: -13px; width: 22px; height: 22px; border: 2px solid rgba(80, 255, 120, 0.95); border-radius: 50%; box-shadow: 0 0 4px rgba(0, 0, 0, 0.6); }
+.ccip-mark i { position: absolute; left: -1px; top: -24px; width: 2px; height: 48px; background: rgba(80, 255, 120, 0.8); }
+.ccip-mark span { position: absolute; left: 16px; top: -7px; white-space: nowrap; font-family: var(--font-mono); font-size: 10px; color: #8dffa8; text-shadow: 0 1px 3px #000; }

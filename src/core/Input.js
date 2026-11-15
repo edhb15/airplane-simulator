@@ -233,8 +233,10 @@ export class Input {
         lookX += applyDeadzone(found.axes[2] || 0, dz);
         lookY += applyDeadzone(found.axes[3] || 0, dz);
         if (flight) {
-          if (press(1)) this.events.push('flapsUp');
-          if (press(2)) this.events.push('flapsDown');
+          // Fighters in the air: B fires a missile, X drops a bomb
+          const weapons = this.weaponsReady();
+          if (press(1)) this.events.push(weapons ? 'fireMissile' : 'flapsUp');
+          if (press(2)) this.events.push(weapons ? 'releaseBomb' : 'flapsDown');
           if (press(3)) this.events.push('gear');
           if (press(8)) this.events.push('camera');
           if (press(9)) this.events.push('pause');
@@ -263,9 +265,10 @@ export class Input {
         }
         if (found.buttons[0] && found.buttons[0].pressed) brake = trigger = 1;
         if (flight) {
+          const weapons = this.weaponsReady();
           if (press(1)) this.events.push('autopilot');
-          if (press(2)) this.events.push('flapsDown');
-          if (press(3)) this.events.push('flapsUp');
+          if (press(2)) this.events.push(weapons ? 'fireMissile' : 'flapsDown');
+          if (press(3)) this.events.push(weapons ? 'releaseBomb' : 'flapsUp');
           if (press(4)) this.events.push('gear');
           if (press(5)) this.events.push('camera');
           if (press(6)) this.events.push('spoilers');
@@ -296,6 +299,12 @@ export class Input {
       ax.pitch = ax.roll = ax.yaw = 0;
       ax.throttleAbs = null;
     }
+  }
+
+  // Controller buttons switch to weapons in a fighter that is airborne
+  weaponsReady() {
+    const p = this.game && this.game.player;
+    return !!(p && p.weapons && p.weapons.armed);
   }
 
   // Mouse deltas for camera look since the last call
