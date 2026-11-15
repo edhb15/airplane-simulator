@@ -196,7 +196,8 @@ export class Game {
     }
     this.state = 'menu';
     // A friend's portal invite link goes straight to the multiplayer screen
-    this.ui.showScreen(platform.inviteParam('room') ? 'multiplayer' : 'main');
+    if (platform.inviteParam('room')) this.ui.showScreen('multiplayer', { autoConnect: true });
+    else this.ui.showScreen('main');
     platform.loadingStop();
     window.addEventListener('beforeunload', (e) => {
       if (this.state === 'flying' && platform.allowUnloadPrompt) {
@@ -528,7 +529,6 @@ export class Game {
     if (this.state !== 'flying' || !p) return;
     if (a === 'map') return ui.toggleMap();
     if (a === 'atc') return ui.toggleATC();
-    if (a === 'chat') return ui.openChat();
     if (a === 'help') return ui.toggleHelp();
     if (a === 'hud') return ui.cycleHud();
     if (this.paused || ui.modalOpen) return;

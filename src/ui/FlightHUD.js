@@ -1,6 +1,6 @@
 // In-flight heads-up interface: flight dashboard (mini PFD/ND, flight data,
 // engines, fuel, gear, GPS), autopilot control panel, mode annunciator,
-// warnings, mission & tutorial panels, ATC radio, chat, landing rate popup and
+// warnings, mission & tutorial panels, ATC radio, landing rate popup and
 // mouse interaction with the 3D cockpit.
 
 import { el, clear, keyCap } from './dom.js';
@@ -9,7 +9,6 @@ import { CAMERA_LABELS } from '../camera/CameraManager.js';
 import { fmtHeading, fmtDuration, fmtLatLon, fmtTime, escapeHtml } from '../core/format.js';
 import { KT, FT } from '../physics/atmosphere.js';
 import * as THREE from 'three';
-import { platform } from '../platform/platform.js';
 
 const HUD_MODES = ['full', 'minimal', 'off'];
 
@@ -33,7 +32,6 @@ export class FlightHUD {
     this.canvasTimer = 0;
     this.radioMsgs = [];
     this.atcOpen = false;
-    this.chatOpen = false;
     this.hoverTimer = 0;
     this.camLabelTimer = null;
     this.landingTimer = null;
@@ -152,28 +150,13 @@ export class FlightHUD {
     this.minStrip = el('div.hud-min.hud-panel.hidden', null, ...Object.values(this.m).map((x) => x.node));
     r.appendChild(this.minStrip);
 
-    // Tooltip, landing popup, ATC, chat, fps
+    // Tooltip, landing popup, ATC, fps
     this.tooltip = el('div.tooltip.hidden');
     r.appendChild(this.tooltip);
     this.landing = el('div.landing-rate.hud-panel.hidden');
     r.appendChild(this.landing);
     this.atc = el('div.atc-panel.hud-panel.interactive.hidden');
     r.appendChild(this.atc);
-    this.chatLines = el('div.lines.hud-panel.scroll');
-    this.chatInput = el('input.hidden', { type: 'text', placeholder: 'Message all pilots — Enter to send, Esc to cancel', maxLength: 240 });
-    this.chatInput.addEventListener('keydown', (e) => {
-      e.stopPropagation();
-      if (e.key === 'Enter') {
-        const t = this.chatInput.value.trim();
-        if (t) {
-          if (this.game.multiplayer.connected) this.game.multiplayer.chat(t);
-          else this.ui.toast('Not connected to multiplayer — open Multiplayer from the main menu', 'warn');
-        }
-        this.closeChat();
-      } else if (e.key === 'Escape') this.closeChat();
-    });
-    this.chat = el('div.chat-box.interactive', null, this.chatLines, this.chatInput);
-    r.appendChild(this.chat);
     this.fpsNode = el('div.fps.hidden');
     r.appendChild(this.fpsNode);
     // Combat overlay: target boxes and the external-view gun reticle
@@ -343,7 +326,6 @@ export class FlightHUD {
     this.aimGround.classList.add('hidden');
     this.ccipMark.classList.add('hidden');
     this.closeATC();
-    this.closeChat();
     this.tooltip.classList.add('hidden');
   }
 
@@ -506,35 +488,6 @@ export class FlightHUD {
     this.game.audio.click();
     this.renderATC();
     return true;
-  }
-
-  // ------------------------------------------------------------------ chat
-  openChat() {
-    if (platform.chatDisabled) {
-      this.ui.toast('Chat is turned off in your settings', 'info');
-      return;
-    }
-    this.chatOpen = true;
-    this.chatInput.classList.remove('hidden');
-    this.game.input.context = 'text';
-    setTimeout(() => this.chatInput.focus(), 0);
-  }
-  closeChat() {
-    if (!this.chatOpen) return;
-    this.chatOpen = false;
-    this.chatInput.value = '';
-    this.chatInput.blur();
-    this.chatInput.classList.add('hidden');
-    if (this.game.state === 'flying') this.game.input.context = 'flight';
-  }
-  addChat(m) {
-    const line = m.system ? el('div.sys', null, m.text) : el('div', null, el('span.from', null, m.from || '?'), m.text);
-    this.chatLines.appendChild(line);
-    while (this.chatLines.children.length > 8) this.chatLines.removeChild(this.chatLines.firstChild);
-    this.chatLines.scrollTop = this.chatLines.scrollHeight;
-    setTimeout(() => {
-      if (line.parentNode && !this.chatOpen) line.parentNode.removeChild(line);
-    }, 30000);
   }
 
   // ------------------------------------------------------------------ cockpit interaction

@@ -13,8 +13,10 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
-      # Only these pages may connect (the GitHub Pages site and local development)
+      # The game is played on GitHub Pages and on CrazyGames (which serves it from
+      # its own domains, sometimes inside a sandboxed frame), so any page may
+      # connect. Per-address, per-room and total connection limits still apply.
       - key: ALLOWED_ORIGINS
-        value: https://edhb15.github.io,http://localhost:5173
+        value: "*"
       - key: TRUST_PROXY
         value: "1"

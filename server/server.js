@@ -1,5 +1,5 @@
 // Skyward multiplayer relay (and optional static file server).
-// Relays aircraft state and chat between players in the same room over
+// Relays aircraft state and dogfight hits between players in the same room over
 // WebSockets (path /ws). If ./dist exists (npm run build) it also serves the
 // game; otherwise "/" shows a small status page, which is the normal setup when
 // the game itself is hosted elsewhere (e.g. GitHub Pages).
@@ -11,7 +11,8 @@
 //   PORT                     listening port (default 8080; set by most hosts)
 //   HOST                     bind address (default 0.0.0.0)
 //   ALLOWED_ORIGINS          comma-separated page origins allowed to connect,
-//                            e.g. "https://user.github.io". Empty = allow any
+//                            e.g. "https://user.github.io,https://*.example.com".
+//                            "*" or empty = allow any
 //   TRUST_PROXY              "1" behind a reverse proxy (Render, Fly, ...) so the
 //                            per-IP limit uses X-Forwarded-For
 //   MAX_CLIENTS              total connections (default 256)
@@ -108,7 +109,19 @@ export function createRelayServer(opts = {}) {
   };
   const publicInfo = (c) => ({ id: c.id, name: c.name, callsign: c.callsign, aircraft: c.aircraft, livery: c.livery });
   const pilots = () => [...rooms.values()].reduce((n, r) => n + r.size, 0);
-  const originAllowed = (origin) => !cfg.allowedOrigins.length || (!!origin && cfg.allowedOrigins.includes(origin.replace(/\/+$/, '').toLowerCase()));
+  // Entries are exact origins, "*" (anyone) or a wildcard host such as
+  // "https://*.crazygames.com" (any subdomain)
+  const originAllowed = (origin) => {
+    const list = cfg.allowedOrigins;
+    if (!list.length || list.includes('*')) return true;
+    if (!origin) return false;
+    const o = origin.replace(/\/+$/, '').toLowerCase();
+    return list.some((a) => {
+      if (a === o) return true;
+      const m = /^(https?:\/\/)\*\.(.+)$/.exec(a);
+      return !!m && o.startsWith(m[1]) && (o.endsWith('.' + m[2]) || o === m[1] + m[2]);
+    });
+  };
   const clientIp = (req) => {
     const fwd = cfg.trustProxy ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '';
     return fwd || req.socket.remoteAddress || 'unknown';
@@ -181,7 +194,7 @@ export function createRelayServer(opts = {}) {
 
   wss.on('connection', (ws, req, ip) => {
     ipCounts.set(ip, (ipCounts.get(ip) || 0) + 1);
-    const client = { id: nextId++, ws, ip, room: null, name: 'Pilot', callsign: '', aircraft: 'k172', livery: '', alive: true, stateCount: 0, chatCount: 0, hitCount: 0, window: Date.now() };
+    const client = { id: nextId++, ws, ip, room: null, name: 'Pilot', callsign: '', aircraft: 'k172', livery: '', alive: true, stateCount: 0, hitCount: 0, window: Date.now() };
     clientOf.set(ws, client);
     ws.on('pong', () => (client.alive = true));
     ws.on('message', (raw) => {
@@ -196,7 +209,6 @@ export function createRelayServer(opts = {}) {
       if (now - client.window > 1000) {
         client.window = now;
         client.stateCount = 0;
-        client.chatCount = 0;
         client.hitCount = 0;
       }
       switch (msg.t) {
@@ -234,13 +246,7 @@ export function createRelayServer(opts = {}) {
           broadcast(client.room, { t: 'info', player: publicInfo(client) }, client.id);
           break;
         }
-        case 'chat': {
-          if (!client.room || ++client.chatCount > 3) return;
-          const text = clean(msg.text, 240);
-          if (!text) return;
-          broadcast(client.room, { t: 'chat', id: client.id, name: client.callsign || client.name, text, ts: now });
-          break;
-        }
+        // There is no chat: 'chat' messages (from older clients) are dropped
         case 'hit': {
           // Cannon hits are scored by the shooter and delivered to the target only
           if (!client.room || ++client.hitCount > 20) return;

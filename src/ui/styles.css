@@ -281,11 +281,6 @@ table.data .num { font-variant-numeric: tabular-nums; font-weight: 600; text-ali
 .axes-grid { display: grid; grid-template-columns: 70px 1fr 50px; gap: 6px 10px; align-items: center; font-size: 12px; font-family: var(--font-mono); }
 
 /* multiplayer */
-.chat-log + div input, .chat-input { width: 100%; }
-.chat-log { flex: 1; min-height: 120px; padding: 10px 12px; font-size: 13px; line-height: 1.5; background: rgba(0, 0, 0, 0.25); border-radius: 6px; border: 1px solid var(--line); }
-.chat-log .sys { color: var(--muted); font-style: italic; }
-.chat-log .from { color: var(--cyan); font-weight: 600; margin-right: 6px; }
-.chat-log .mine .from { color: var(--accent); }
 .players-list .p { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(140, 190, 255, 0.06); font-size: 13px; }
 
 /* debrief */
@@ -456,13 +451,6 @@ table.data .num { font-variant-numeric: tabular-nums; font-weight: 600; text-ali
 .atc-panel .log .st { color: var(--cyan); font-family: var(--font-mono); }
 .atc-panel .log .player .st { color: var(--accent); }
 
-/* chat */
-.chat-box { position: absolute; left: 12px; bottom: 200px; width: 380px; display: flex; flex-direction: column; gap: 6px; }
-.chat-box .lines { padding: 8px 10px; font-size: 13px; line-height: 1.45; max-height: 180px; }
-.chat-box .lines:empty { display: none; }
-.chat-box .from { color: var(--cyan); font-weight: 600; margin-right: 6px; }
-.chat-box .sys { color: var(--muted); font-style: italic; }
-.chat-box input { width: 100%; }
 
 /* help */
 .help-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 4px 24px; }

@@ -54,7 +54,6 @@ export const DEFAULT_BINDINGS = {
   map: ['KeyM'],
   hud: ['KeyH'],
   atc: ['Tab'],
-  chat: ['Enter'],
   pause: ['Escape', 'KeyP'],
   simRateUp: ['KeyT'],
   simRateDown: ['KeyY'],

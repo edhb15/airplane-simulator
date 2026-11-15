@@ -237,6 +237,8 @@ await run('multiplayer local mode two clients', async () => {
   await p2.waitForFunction(() => window.__sim && window.__sim.state === 'menu', null, { timeout: 120000, polling: 500 });
   await p2.evaluate(async () => {
     const g = window.__sim;
+    window.__notices = [];
+    g.multiplayer.on((ev) => ev.type === 'notice' && window.__notices.push(ev.text));
     await g.multiplayer.connect({ url: 'local', room: 'test', name: 'Bob', callsign: 'BOB1', aircraft: 'k172', livery: 'trainer' });
     await g.startFlight({ aircraftId: 'k172', airport: 'AXMI', spawn: 'air', waitForScenery: false });
   });
@@ -248,13 +250,32 @@ await run('multiplayer local mode two clients', async () => {
       window.__step(0.25);
       await new Promise((res) => setTimeout(res, 120));
     }
-    g.multiplayer.chat('hello from Alice');
-    await new Promise((res) => setTimeout(res, 300));
     return `players ${g.multiplayer.players.map((p) => p.callsign).join(',')}, traffic ${g.multiplayer.trafficFor(g.player.position).length}`;
   });
-  const chat = await p2.evaluate(() => window.__sim.ui.chatHistory.map((c) => c.text).join(' | '));
+  const notices = await p2.evaluate(() => window.__notices.join(' | '));
   await p2.close();
-  return `${r}; p2 chat: ${chat}`;
+  if (!/ALI1 joined/.test(notices)) throw new Error(`no join notice on p2: ${notices}`);
+  return `${r}; p2 notices: ${notices}`;
+});
+
+await run('multiplayer screen: online only, no server field, no chat', async () => {
+  const r = await page.evaluate(() => {
+    const g = window.__sim;
+    g.multiplayer.disconnect();
+    g.toMenu();
+    g.ui.showScreen('multiplayer');
+    const node = document.querySelector('.screen.page');
+    const text = node.textContent;
+    return {
+      server: /server address|your server/i.test(text),
+      local: /local|browser tabs/i.test(text),
+      chat: /chat/i.test(text) || !!node.querySelector('.chat-log'),
+      url: g.multiplayer.defaultUrl(),
+    };
+  });
+  if (r.server || r.local || r.chat) throw new Error(JSON.stringify(r));
+  if (r.url !== 'wss://skyward-multiplayer.onrender.com/ws') throw new Error(`server ${r.url}`);
+  return `default server ${r.url}`;
 });
 
 await run('fighter guns: fire, shoot down a drone, safe on ground, rearm', () =>

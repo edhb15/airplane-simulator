@@ -73,9 +73,6 @@ class Platform {
   get allowUnloadPrompt() {
     return !this.isCrazyGames;
   }
-  get chatDisabled() {
-    return !!this.settings.disableChat;
-  }
   get muted() {
     return !!this.settings.muteAudio || this.adPlaying;
   }

@@ -9,7 +9,6 @@ import { AIRPORT_INFO, getAirport } from '../world/airportGeometry.js';
 import { WEATHER_PRESETS, Weather } from '../world/Weather.js';
 import { MISSIONS, MISSION_CATEGORIES, TUTORIALS, QUICKSTART_ID } from '../missions/missions.js';
 import { generateJobs, jobToMission } from '../missions/Career.js';
-import { normalizeServerUrl } from '../net/Multiplayer.js';
 import { RANKS } from '../core/Profile.js';
 import { GRAPHICS_PRESETS, DEFAULT_BINDINGS } from '../core/Settings.js';
 import { fmtTime, fmtMoney, fmtDuration, fmtMass, escapeHtml } from '../core/format.js';
@@ -75,7 +74,6 @@ export const ACTION_INFO = {
   map: ['Map & flight plan', 'Interface'],
   hud: ['Cycle HUD mode', 'Interface'],
   atc: ['ATC radio menu', 'Interface'],
-  chat: ['Multiplayer chat', 'Interface'],
   pause: ['Pause menu', 'Interface'],
   simRateUp: ['Simulation rate faster', 'Interface'],
   simRateDown: ['Simulation rate slower', 'Interface'],
@@ -170,7 +168,7 @@ export class MenuScreens {
       ['Missions', 'Passenger, cargo, emergency, rescue and military missions', () => this.ui.showScreen('missions')],
       ['Flight School', 'Step-by-step lessons from first flight to autoland', () => this.ui.showScreen('school')],
       ['Aircraft Selection', 'Hangar, aircraft purchases and the livery paint shop', () => this.ui.showScreen('hangar')],
-      ['Multiplayer', 'Fly together with friends and chat', () => this.ui.showScreen('multiplayer')],
+      ['Multiplayer', 'Fly online with other pilots', () => this.ui.showScreen('multiplayer', { autoConnect: true })],
       ['Settings', 'Graphics, sound, controls and gameplay', () => this.ui.showScreen('settings')],
     ];
     const menu = el('div.menu');
@@ -1193,135 +1191,96 @@ export class MenuScreens {
   }
 
   // =================================================================== MULTIPLAYER
-  multiplayer() {
+  // Always online on the public server. Opening the screen from the menu
+  // connects straight away (opts.autoConnect); players choose a room.
+  multiplayer(opts = {}) {
     const g = this.game;
     const mp = g.multiplayer;
     const p = this.profile;
-    const { node, body } = this.page('Multiplayer', 'Fly together', () => this.ui.showScreen('main'));
+    const { node, body } = this.page('Multiplayer', 'Fly together online', () => this.ui.showScreen('main'));
     const left = el('div.panel.scroll.interactive', { style: { width: '460px', flex: 'none', padding: '18px 22px' } });
-    const right = el('div.panel.interactive.col', { style: { flex: '1', padding: '18px 22px', minWidth: '0' } });
+    const right = el('div.panel.scroll.interactive.col', { style: { flex: '1', padding: '18px 22px', minWidth: '0' } });
     body.appendChild(left);
     body.appendChild(right);
-    if (!this.mpCfg) {
-      // A portal invite link carries the room (and server) of the friend who sent it
-      const invRoom = platform.inviteParam('room');
-      let invServer = '';
-      try {
-        invServer = normalizeServerUrl(platform.inviteParam('server') || '');
-      } catch {
-        invServer = '';
-      }
-      const url = invServer || mp.defaultUrl();
-      this.mpCfg = { mode: url ? 'server' : 'local', url, room: invRoom || 'public' };
-    }
-    const cfg = this.mpCfg;
-    const status = el('div.muted', { style: { marginTop: '10px', fontSize: '13px' } }, mp.connected ? `Connected — room “${mp.room}”` : 'Not connected');
+    // A portal invite link carries the room of the friend who sent it
+    if (!this.mpRoom) this.mpRoom = platform.inviteParam('room') || 'public';
+    const status = el('div.muted', { style: { marginTop: '10px', fontSize: '13px', minHeight: '18px' } }, mp.connected ? `Connected — room “${mp.room}”` : mp.reconnecting ? 'Reconnecting…' : 'Not connected');
     const nameIn = el('input', { type: 'text', name: 'pilot-name', maxLength: 24 });
     nameIn.value = p.data.name;
     const csIn = el('input', { type: 'text', name: 'callsign', maxLength: 10 });
     csIn.value = p.data.callsign;
-    const urlIn = el('input', { type: 'text', name: 'server', spellcheck: false });
-    urlIn.value = cfg.url;
     const roomIn = el('input', { type: 'text', name: 'room', maxLength: 24 });
-    roomIn.value = cfg.room;
+    roomIn.value = mp.connected ? mp.room : this.mpRoom;
     left.appendChild(el('div.section-title', null, 'Pilot'));
     left.appendChild(row('Name', nameIn));
     left.appendChild(row('Callsign', csIn));
-    left.appendChild(el('div.section-title', null, 'Session'));
-    urlIn.placeholder = 'wss://your-server.onrender.com/ws';
-    const urlRow = row('Server address', urlIn, platform.isCrazyGames ? 'The Skyward multiplayer server address' : mp.staticHost ? 'The multiplayer server you deployed (see the README), e.g. your-server.onrender.com' : 'Run “npm run server” to host one');
+    left.appendChild(el('div.section-title', null, 'Room'));
+    left.appendChild(row('Room', roomIn, 'Pilots in the same room see each other'));
     // Rooms open on the server
     const roomsBox = el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' } });
-    const roomsRow = row('Open rooms', roomsBox, 'Click a room to join it');
+    left.appendChild(row('Open rooms', roomsBox, 'Click a room to join it'));
     const loadRooms = async () => {
       clear(roomsBox);
-      let url;
-      try {
-        url = normalizeServerUrl(urlIn.value);
-      } catch {
-        url = '';
-      }
-      if (!url) {
-        roomsBox.appendChild(el('span.muted', { style: { fontSize: '13px' } }, 'Enter a server address'));
-        return;
-      }
       roomsBox.appendChild(el('span.muted', { style: { fontSize: '13px' } }, 'Checking…'));
       try {
-        const list = await mp.listRooms(url);
+        const list = await mp.listRooms(mp.defaultUrl());
         clear(roomsBox);
-        if (!list.length) roomsBox.appendChild(el('span.muted', { style: { fontSize: '13px' } }, 'No one is flying — start a room'));
+        if (!list.length) roomsBox.appendChild(el('span.muted', { style: { fontSize: '13px' } }, 'No one is flying yet — be the first'));
         for (const r of list.sort((a, b) => b.players - a.players))
-          roomsBox.appendChild(button(`${r.name} · ${r.players} pilot${r.players === 1 ? '' : 's'}`, () => (roomIn.value = r.name), 'small'));
+          roomsBox.appendChild(button(`${r.name} · ${r.players} pilot${r.players === 1 ? '' : 's'}`, () => join(r.name), 'small'));
       } catch {
         clear(roomsBox);
-        roomsBox.appendChild(el('span.muted', { style: { fontSize: '13px' } }, 'Server asleep or unreachable — it wakes up when you connect'));
+        roomsBox.appendChild(el('span.muted', { style: { fontSize: '13px' } }, 'The server is waking up — rooms appear once it is online'));
       }
       roomsBox.appendChild(button('↻', loadRooms, 'small ghost'));
     };
-    left.appendChild(
-      row(
-        'Connection',
-        segmented(
-          [
-            { value: 'server', label: 'Online server' },
-            { value: 'local', label: 'Local (browser tabs)' },
-          ],
-          cfg.mode,
-          (v) => {
-            cfg.mode = v;
-            urlRow.classList.toggle('hidden', v === 'local');
-            roomsRow.classList.toggle('hidden', v === 'local');
-            if (v === 'server') loadRooms();
-          }
-        )
-      )
-    );
-    urlRow.classList.toggle('hidden', cfg.mode === 'local');
-    roomsRow.classList.toggle('hidden', cfg.mode === 'local');
-    urlIn.addEventListener('change', loadRooms);
-    left.appendChild(urlRow);
-    left.appendChild(row('Room', roomIn, 'Pilots in the same room see each other'));
-    left.appendChild(roomsRow);
-    if (cfg.mode === 'server' && !mp.connected) loadRooms();
-    const connectBtn = button(mp.connected ? 'Disconnect' : 'Connect', async () => {
-      if (mp.connected) {
-        mp.disconnect();
-        this.ui.showScreen('multiplayer');
-        return;
-      }
-      if (cfg.mode === 'server') {
-        try {
-          cfg.url = normalizeServerUrl(urlIn.value);
-        } catch {
-          cfg.url = '';
-        }
-        if (!cfg.url) {
-          status.textContent = 'Enter the multiplayer server address (e.g. your-server.onrender.com) or use Local mode.';
-          return;
-        }
-        urlIn.value = cfg.url;
-      }
-      cfg.room = roomIn.value.trim() || 'public';
+    let busy = false;
+    const join = async (room) => {
+      if (busy) return;
+      busy = true;
+      room = String(room || roomIn.value || '').trim() || 'public';
+      roomIn.value = room;
+      this.mpRoom = room;
       p.data.name = nameIn.value.trim() || p.data.name;
       p.data.callsign = csIn.value.trim().toUpperCase() || p.data.callsign;
       p.persist();
       status.textContent = 'Connecting…';
-      connectBtn.disabled = true;
+      joinBtn.disabled = true;
       try {
         const spec = g.showcaseSpec || getAircraft('mj320');
-        if (cfg.mode === 'server') await mp.wakeServer(cfg.url, (t) => (status.textContent = t));
-        await mp.connect({ url: cfg.mode === 'local' ? 'local' : cfg.url, room: cfg.room, name: p.data.name, callsign: p.data.callsign, aircraft: spec.id, livery: p.liveryFor(spec.id) });
-        if (cfg.mode === 'server') mp.rememberServer(cfg.url);
-        this.ui.showScreen('multiplayer');
+        const url = mp.defaultUrl();
+        await mp.wakeServer(url, (t) => (status.textContent = t));
+        await mp.connect({ url, room, name: p.data.name, callsign: p.data.callsign, aircraft: spec.id, livery: p.liveryFor(spec.id) });
+        if (this.ui.screen === 'multiplayer') this.ui.showScreen('multiplayer');
       } catch (e) {
-        connectBtn.disabled = false;
-        status.textContent = `Connection failed: ${e && e.message ? e.message : 'server unreachable'}. Check the server address, or use Local mode.`;
+        status.textContent = `Could not connect: ${e && e.message ? e.message : 'server unreachable'}. Check your internet connection and try again.`;
+        joinBtn.disabled = false;
+      } finally {
+        busy = false;
       }
-    }, mp.connected ? 'danger' : 'primary');
-    left.appendChild(el('div', { style: { display: 'flex', gap: '10px', marginTop: '16px' } }, connectBtn, button('Choose aircraft & fly', () => this.ui.showScreen('freeflight'), mp.connected ? 'primary' : '')));
+    };
+    const joinBtn = button(mp.connected ? 'Join this room' : 'Connect', () => join(roomIn.value), mp.connected ? '' : 'primary');
+    roomIn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') join(roomIn.value);
+    });
+    const actions = el('div', { style: { display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap' } });
+    if (!mp.connected || roomIn.value !== mp.room) actions.appendChild(joinBtn);
+    if (mp.connected) {
+      roomIn.addEventListener('input', () => {
+        if (roomIn.value.trim() && roomIn.value.trim() !== mp.room && !joinBtn.isConnected) actions.prepend(joinBtn);
+      });
+      actions.appendChild(
+        button('Leave', () => {
+          mp.disconnect();
+          this.ui.showScreen('multiplayer');
+        }, 'ghost')
+      );
+    }
+    actions.appendChild(button('Choose aircraft & fly', () => this.ui.showScreen('freeflight'), mp.connected ? 'primary' : ''));
+    left.appendChild(actions);
     left.appendChild(status);
-    // Portal invite link: friends who open it join this room on this server
-    if (platform.supportsInvites && mp.connected && mp.mode === 'server') {
+    // Portal invite link: friends who open it join this room
+    if (platform.supportsInvites && mp.connected) {
       const linkOut = el('input', { type: 'text', readOnly: true, spellcheck: false });
       linkOut.classList.add('hidden');
       left.appendChild(
@@ -1329,13 +1288,7 @@ export class MenuScreens {
           'div',
           { style: { marginTop: '12px' } },
           button('Invite friends', async () => {
-            let server = '';
-            try {
-              server = new URL(mp.lastArgs ? mp.lastArgs.url : cfg.url).host;
-            } catch {
-              server = '';
-            }
-            const link = platform.inviteLink(server ? { room: mp.room, server } : { room: mp.room });
+            const link = platform.inviteLink({ room: mp.room });
             if (!link) return this.ui.toast('Invite links are not available right now', 'warn');
             linkOut.value = link;
             linkOut.classList.remove('hidden');
@@ -1351,50 +1304,25 @@ export class MenuScreens {
         )
       );
     }
-    left.appendChild(el('div.section-title', null, 'How it works'));
-    const howTo = platform.isCrazyGames
-      ? 'Online: everyone on the same server and room flies together — use “Invite friends” after connecting to send a link to your room. A sleeping server takes up to a minute to wake. Local: open the game in several browser tabs on this computer.'
-      : 'Online: everyone connects to the same multiplayer server and joins the same room — share a link with ?server=<address> so friends land on the right server. A free hosted server falls asleep when nobody is flying and takes up to a minute to wake. Local: open the simulator in several browser tabs on this computer.';
-    left.appendChild(
-      el(
-        'p.muted',
-        { style: { fontSize: '13px', lineHeight: '1.55' } },
-        `${howTo} ${platform.chatDisabled ? 'Other pilots' : 'In flight press Enter to chat; other pilots'} appear in the world, on your map, navigation display and TCAS.`
-      )
-    );
 
-    right.appendChild(el('div.section-title', null, `Pilots in session (${mp.players.length + (mp.connected ? 1 : 0)})`));
+    right.appendChild(el('div.section-title', null, `Pilots in this room (${mp.players.length + (mp.connected ? 1 : 0)})`));
     const pl = el('div.players-list');
     if (mp.connected) pl.appendChild(el('div.p', null, el('span', null, `${p.data.callsign} (you)`), el('span.muted', null, (g.showcaseSpec || {}).name || '')));
     for (const pi of mp.players) pl.appendChild(el('div.p', null, el('span', null, `${pi.callsign || ''} ${pi.name ? '· ' + pi.name : ''}`), el('span.muted', null, getAircraft(pi.aircraft).name)));
-    if (!mp.connected) pl.appendChild(el('div.muted', { style: { fontSize: '13px' } }, 'Connect to see other pilots.'));
+    if (!mp.connected) pl.appendChild(el('div.muted', { style: { fontSize: '13px' } }, 'Connect to see who is flying.'));
     right.appendChild(pl);
-    if (platform.chatDisabled) {
-      this.mpLog = null;
-      return node;
-    }
-    right.appendChild(el('div.section-title', null, 'Chat'));
-    const log = el('div.chat-log.scroll');
-    for (const m of this.ui.chatHistory) log.appendChild(this.chatLine(m));
-    right.appendChild(log);
-    const chatIn = el('input', { type: 'text', placeholder: mp.connected ? 'Type a message and press Enter' : 'Connect to chat', maxLength: 240 });
-    chatIn.disabled = !mp.connected;
-    chatIn.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && chatIn.value.trim()) {
-        mp.chat(chatIn.value);
-        chatIn.value = '';
-      }
-      e.stopPropagation();
-    });
-    right.appendChild(el('div', { style: { marginTop: '8px' } }, chatIn));
-    log.scrollTop = log.scrollHeight;
-    this.mpLog = log;
+    right.appendChild(el('div.section-title', null, 'How it works'));
+    right.appendChild(
+      el(
+        'p.muted',
+        { style: { fontSize: '13px', lineHeight: '1.55' } },
+        'Everyone flies on the same Skyward server. Pilots in the same room see each other in the world, on the map, the navigation display and TCAS. In fighters you can dogfight. If nobody has played for a while the server is asleep and takes up to a minute to wake up.'
+      )
+    );
+    if (mp.connected) setTimeout(loadRooms, 0);
+    else if (opts.autoConnect && !mp.reconnecting) setTimeout(() => join(this.mpRoom).then(() => {}), 0);
+    else setTimeout(loadRooms, 0);
     return node;
-  }
-
-  chatLine(m) {
-    if (m.system) return el('div.sys', null, m.text);
-    return el('div' + (m.mine ? '.mine' : ''), null, el('span.from', null, m.from || '?'), m.text);
   }
 
   // =================================================================== SETTINGS

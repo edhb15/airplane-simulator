@@ -20,7 +20,7 @@ npm start            # builds dist/ and serves it on http://localhost:8080 (WebS
 PORT=9000 npm run server   # serve an existing build on another port
 ```
 
-For multiplayer while developing, run `npm run dev` and `npm run server` side by side; the client connects to `ws://<host>:8080/ws` by default.
+To test multiplayer against a local server while developing, run `npm run dev` and `npm run server` side by side and open `http://localhost:5173/?server=localhost:8080`.
 
 ### GitHub Pages
 
@@ -40,7 +40,7 @@ The game can be published on [CrazyGames](https://developer.crazygames.com). A s
 npm run build:crazygames     # writes dist-crazygames/index.html
 ```
 
-The CrazyGames build is a **single self-contained `index.html`** (about 1.7 MB): the game code, styles, fonts and terrain worker are all inside it. Upload that one file in the CrazyGames developer portal as an HTML5 game. Don't upload the project's source code — browsers can't run it directly. `npm run package:crazygames` also wraps it in `skyward-crazygames.zip` for portals that want a zip. The *CrazyGames package* workflow builds it on every push to `main`: open the run in the Actions tab and download the `skyward-crazygames` artifact (GitHub zips it; the `index.html` inside is the file to upload). To bake in a multiplayer server, set the `MP_SERVER_URL` repository variable described below.
+The CrazyGames build is a **single self-contained `index.html`** (about 1.7 MB): the game code, styles, fonts and terrain worker are all inside it. Upload that one file in the CrazyGames developer portal as an HTML5 game. Don't upload the project's source code — browsers can't run it directly. `npm run package:crazygames` also wraps it in `skyward-crazygames.zip` for portals that want a zip. The *CrazyGames package* workflow builds it on every push to `main`: open the run in the Actions tab and download the `skyward-crazygames` artifact (GitHub zips it; the `index.html` inside is the file to upload).
 
 To try it locally with the SDK's local test mode (demo ads, logged SDK calls): `npm run dev:crazygames`.
 
@@ -54,7 +54,7 @@ What the CrazyGames build does (see `src/platform/platform.js`):
 | `game.gameplayStart` / `gameplayStop` | Flying vs. menus, pause, crash and debrief screens |
 | `game.happytime` | Mission or lesson passed, promotion |
 | `ad.requestAd('midgame')` | Between flights only (when starting another flight), at most every 3 minutes; the game is muted while the ad plays |
-| `game.settings` (`muteAudio`, `disableChat`) | Mutes all sound and speech; hides multiplayer chat |
+| `game.settings` (`muteAudio`) | Mutes all sound and speech |
 | `data` | Progress and settings are saved to the player's CrazyGames account (with localStorage as a fallback) |
 | `game.inviteLink` / `getInviteParam` | *Invite friends* button in Multiplayer; an invite link opens the right room |
 
@@ -62,7 +62,9 @@ Portal rules handled by the build: no Exit button, no "leave this page?" prompt,
 
 ### Multiplayer server
 
-`server/server.js` is a small WebSocket relay: pilots in the same room see each other's aircraft and chat. It has no database and needs no configuration, so any Node.js host works. The game finds it through the `MP_SERVER_URL` repository variable (baked into the Pages build), a `?server=` link, or the address a player types in the Multiplayer screen.
+`server/server.js` is a small WebSocket relay: pilots in the same room see each other's aircraft and can dogfight. There is no chat. It has no database and needs no configuration, so any Node.js host works.
+
+Multiplayer is always online: the game connects to the public server **`wss://skyward-multiplayer.onrender.com/ws`** (`DEFAULT_SERVER` in `src/net/Multiplayer.js`) as soon as a player opens the Multiplayer screen, and players only choose a room. For testing, a `?server=` page parameter or a `VITE_MP_SERVER` build variable points a build at another server.
 
 **Deploy it for free on Render** (recommended; the free tier supports WebSockets):
 
@@ -70,17 +72,18 @@ Portal rules handled by the build: no Exit button, no "leave this page?" prompt,
 
 1. Click the button, sign in to Render with GitHub and press **Apply**. The settings come from [`render.yaml`](render.yaml): a free web service named `skyward-multiplayer` that runs `node server/server.js` from `main`.
 2. When it is live, open its URL (for example `https://skyward-multiplayer.onrender.com`). You should see “Multiplayer server is online”.
-3. In GitHub go to **Settings → Secrets and variables → Actions → Variables** and add `MP_SERVER_URL` = `wss://skyward-multiplayer.onrender.com/ws` (use your service's address).
-4. Re-run the **Deploy to GitHub Pages** workflow (Actions tab → *Run workflow*). The site now connects to your server by default.
+3. If your service has a different address, change `DEFAULT_SERVER` in `src/net/Multiplayer.js`.
 
-Free Render services go to sleep after a while without players. The first pilot to connect waits up to about a minute while it wakes; the game shows “Waking up the server…” meanwhile. Players can also share links such as `https://edhb15.github.io/airplane-simulator/?server=skyward-multiplayer.onrender.com` to point friends at a server.
+`render.yaml` sets `ALLOWED_ORIGINS` to `*` so the game can connect from GitHub Pages and from CrazyGames, which serves it from its own domains. Render applies this when the blueprint syncs from `main`. If the service still refuses connections from CrazyGames, set `ALLOWED_ORIGINS` to `*` under **Environment** in the Render dashboard.
+
+Free Render services go to sleep after a while without players. The first pilot to connect waits up to about a minute while it wakes; the game shows “Waking up the server…” meanwhile.
 
 **Other hosts:** the [`Dockerfile`](Dockerfile) runs the server on Fly.io, Railway, Koyeb, a VPS or any Docker host (`docker build -t skyward-mp . && docker run -p 8080:8080 skyward-mp`). Without Docker: `npm ci --omit=dev && node server/server.js`.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | 8080 | Listening port (most hosts set it) |
-| `ALLOWED_ORIGINS` | any | Comma-separated pages allowed to connect, e.g. `https://edhb15.github.io` |
+| `ALLOWED_ORIGINS` | any | Comma-separated pages allowed to connect, e.g. `https://edhb15.github.io,https://*.crazygames.com`; `*` allows any |
 | `TRUST_PROXY` | off | `1` behind a hosting proxy so per-address limits use the real client address |
 | `MAX_CLIENTS` | 256 | Total connections |
 | `MAX_CONNECTIONS_PER_IP` | 8 | Connections from one address |
@@ -130,7 +133,7 @@ Four aircraft (one per category) are available from the start; the rest are boug
 - **Missions** — 22 missions in six categories: passenger, cargo, emergency landings (engine failure, fire, glider, gear failure, fuel leak), search & rescue (find and supply drops), long-distance and military (gunnery range, demolition run, canyon rings, intercept, air show).
 - **Tutorial** — new players are offered a 3-minute guided first flight (take off, climb, level off, turn, cameras, map and pause) on their first visit. It leads the main menu until it is passed and stays available in Flight School. Every lesson step has a *Skip step* button.
 - **Flight School** — six interactive lessons from basic controls to ILS autoland and fighter handling, plus a pilot handbook.
-- **Multiplayer** — fly with other pilots in shared rooms with chat; other aircraft appear in the world, on the map, the navigation display and TCAS. A *Local* mode links several browser tabs without a server.
+- **Multiplayer** — always online: opening the Multiplayer screen connects to the public Skyward server, and pilots in the same room see each other in the world, on the map, the navigation display and TCAS. Fighters can dogfight. There is no chat.
 
 ### Air traffic control & traffic
 - AI airliners, business jets, cargo and GA traffic push back, taxi along the taxiway network, take off, fly between airports, fly circuits, land and park at gates.
@@ -182,7 +185,7 @@ All keys can be rebound in *Settings → Key bindings*. Press `` ` `` or F10 in 
 | Elevator trim | Home / End |
 | Cameras | 1 cockpit · 2 cabin · 3 external · 4 wing · 5 cinematic · 6 tower · 7 fly-by · C cycle |
 | Look around / zoom | right-drag / mouse wheel |
-| Map · ATC · chat · HUD | M · Tab · Enter · H |
+| Map · ATC · HUD | M · Tab · H |
 | Simulation rate | T faster · Y slower |
 | Pause menu | Esc or P |
 

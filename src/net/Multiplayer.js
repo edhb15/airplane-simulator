@@ -1,17 +1,18 @@
 // Multiplayer client. Transports: WebSocket relay server (server/server.js) or
-// "local" mode using BroadcastChannel between tabs of the same browser.
+// "local" mode using BroadcastChannel between tabs of the same browser (used by
+// the automated tests only; players always fly on the public server).
 // Remote aircraft are interpolated ~150 ms behind real time.
 
 import * as THREE from 'three';
 import { AircraftVisual } from '../aircraft/AircraftVisual.js';
 import { getAircraft } from '../aircraft/aircraftData.js';
 import { FT, KT } from '../physics/atmosphere.js';
-import { platform } from '../platform/platform.js';
 
 const SEND_HZ = 10;
 const DELAY = 0.15;
 const RECONNECT_DELAYS = [1, 2, 4, 8, 15, 30]; // seconds
-const SAVED_SERVER_KEY = 'skyward.mpServer';
+// Everyone flies on the same public server
+export const DEFAULT_SERVER = 'wss://skyward-multiplayer.onrender.com/ws';
 
 // Accepts "wss://host/ws", "https://host", "host:8080" ... and returns a WebSocket URL
 export function normalizeServerUrl(input) {
@@ -63,7 +64,6 @@ class BroadcastTransport {
       setTimeout(() => this.emit({ t: 'welcome', id: this.id, room: this.room, players: [...this.peers.values()].map((p) => p.info) }), 50);
       return;
     }
-    if (msg.t === 'chat') this.emit({ t: 'chat', id: this.id, name: this.info.callsign, text: msg.text, ts: Date.now() });
     if (msg.t === 'down') this.emit({ t: 'down', id: this.id, by: msg.by, name: this.info.callsign, byName: this.peers.get(msg.by)?.info.callsign || '' });
     if (msg.t === 'info') this.info = { ...this.info, aircraft: msg.aircraft, livery: msg.livery };
     this.post(msg);
@@ -91,7 +91,6 @@ class BroadcastTransport {
       }
     }
     if (m.t === 'state') this.emit({ t: 'state', id: m.from, s: m.s });
-    if (m.t === 'chat') this.emit({ t: 'chat', id: m.from, name: m.info.callsign, text: m.text, ts: Date.now() });
     if (m.t === 'hit' && m.target === this.id) this.emit({ t: 'hit', from: m.from, name: m.info.callsign, dmg: Math.max(0, Math.min(50, Number(m.dmg) || 0)) });
     if (m.t === 'down') this.emit({ t: 'down', id: m.from, by: m.by, name: m.info.callsign, byName: m.by === this.id ? this.info.callsign : this.peers.get(m.by)?.info.callsign || '' });
   }
@@ -179,17 +178,9 @@ export class Multiplayer {
     for (const fn of this.listeners) fn(ev);
   }
 
-  // Static hosts (GitHub Pages) cannot run the relay server: there is no default
-  // server address there and the menu starts in local (browser tabs) mode
-  get staticHost() {
-    return platform.isCrazyGames || /\.github\.io$/i.test(window.location.hostname);
-  }
-
-  // Server address, in order of preference: ?server= in the page URL, the
-  // address baked in at build time (VITE_MP_SERVER), the last server used, then
-  // the page's own host (the relay can serve the game itself)
+  // The public Skyward server. A ?server= page parameter or VITE_MP_SERVER at
+  // build time can point a test build somewhere else.
   defaultUrl() {
-    const loc = window.location;
     const pick = (v) => {
       try {
         return v ? normalizeServerUrl(v) : '';
@@ -197,28 +188,7 @@ export class Multiplayer {
         return '';
       }
     };
-    const param = pick(new URLSearchParams(loc.search).get('server'));
-    if (param) return param;
-    const built = pick(import.meta.env.VITE_MP_SERVER);
-    if (built) return built;
-    let saved = '';
-    try {
-      saved = pick(localStorage.getItem(SAVED_SERVER_KEY));
-    } catch {
-      /* storage unavailable */
-    }
-    if (saved) return saved;
-    if (this.staticHost) return '';
-    if (loc.port === '5173' || loc.port === '4173') return `ws://${loc.hostname}:8080/ws`;
-    return `${loc.protocol === 'https:' ? 'wss' : 'ws'}://${loc.host}/ws`;
-  }
-
-  rememberServer(url) {
-    try {
-      localStorage.setItem(SAVED_SERVER_KEY, url);
-    } catch {
-      /* storage unavailable */
-    }
+    return pick(new URLSearchParams(window.location.search).get('server')) || pick(import.meta.env.VITE_MP_SERVER) || DEFAULT_SERVER;
   }
 
   // Free hosting tiers put idle servers to sleep: poll /health until it answers
@@ -284,7 +254,7 @@ export class Multiplayer {
     this.transport.onmessage = (m) => this.receive(m);
     this.transport.send(this.hello);
     this.connected = true;
-    this.emit({ type: 'status', text: reconnect ? 'Reconnected to the multiplayer server' : `Connected to room "${this.room}" (${this.mode === 'local' ? 'local tabs' : 'server'})` });
+    this.emit({ type: 'status', text: reconnect ? 'Reconnected to the multiplayer server' : `Connected — room "${this.room}"` });
     this.reconnectAttempts = 0;
   }
 
@@ -371,7 +341,7 @@ export class Multiplayer {
         break;
       case 'join':
         this.addRemote(m.player);
-        this.emit({ type: 'chat', system: true, text: `${m.player.callsign || m.player.name} joined the session` });
+        this.emit({ type: 'notice', text: `${m.player.callsign || m.player.name} joined` });
         break;
       case 'info': {
         const r = this.remotes.get(m.player.id);
@@ -384,7 +354,7 @@ export class Multiplayer {
       case 'leave': {
         const r = this.remotes.get(m.id);
         if (r) {
-          this.emit({ type: 'chat', system: true, text: `${r.info.callsign || r.info.name} left the session` });
+          this.emit({ type: 'notice', text: `${r.info.callsign || r.info.name} left` });
           this.removeRemote(r);
           this.remotes.delete(m.id);
         }
@@ -397,16 +367,13 @@ export class Multiplayer {
         if (r.buffer.length > 30) r.buffer.shift();
         break;
       }
-      case 'chat':
-        this.emit({ type: 'chat', from: m.name, text: m.text, mine: m.id === this.myId });
-        break;
       case 'hit':
         if (this.game.player) this.game.player.applyDamage(Number(m.dmg) || 0, m.name || 'another pilot', m.from);
         break;
       case 'down': {
         const victim = m.name || 'A pilot';
         const shooter = m.byName || 'another pilot';
-        this.emit({ type: 'chat', system: true, text: `✈ ${victim} was shot down by ${shooter}` });
+        if (m.by !== this.myId) this.emit({ type: 'notice', text: `✈ ${victim} was shot down by ${shooter}` });
         if (m.by === this.myId && m.id !== this.myId) {
           this.game.ui.toast(`Splash! You shot down ${victim}`, 'success', 3500);
           if (this.game.combat) this.game.combat.kills++;
@@ -419,14 +386,6 @@ export class Multiplayer {
         if (m.text === 'Room is full') this.manualClose = true;
         this.emit({ type: 'status', text: m.text === 'Server restarting' ? 'The multiplayer server is restarting — reconnecting…' : m.text });
         break;
-    }
-  }
-
-  chat(text) {
-    if (!this.transport || !text.trim()) return;
-    this.transport.send({ t: 'chat', text: text.trim().slice(0, 240) });
-    if (this.mode === 'server') {
-      /* server echoes chat back to everyone including us */
     }
   }
 

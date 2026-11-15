@@ -40,7 +40,7 @@ describe('relay server', () => {
     await until(() => relay.wss.clients.size === 0);
   });
 
-  it('joins a room, announces pilots and relays state and chat', async () => {
+  it('joins a room, announces pilots and relays state (no chat)', async () => {
     const a = await connect(port);
     hello(a, 'r1', 'ALPHA');
     expect(await until(() => a.msgs.some((m) => m.t === 'welcome'))).toBe(true);
@@ -57,9 +57,9 @@ describe('relay server', () => {
     expect(st.s.extra).toBeUndefined();
     expect(a.msgs.some((m) => m.t === 'state')).toBe(false); // not echoed to the sender
 
-    b.ws.send(JSON.stringify({ t: 'chat', text: 'hello <b>all</b>' }));
-    expect(await until(() => a.msgs.some((m) => m.t === 'chat'))).toBe(true);
-    expect(a.msgs.find((m) => m.t === 'chat')).toMatchObject({ name: 'BRAVO', text: 'hello ball/b' });
+    // Chat was removed: messages from older clients are not relayed
+    b.ws.send(JSON.stringify({ t: 'chat', text: 'hello all' }));
+    expect(await until(() => a.msgs.some((m) => m.t === 'chat'), 300)).toBe(false);
 
     b.ws.close();
     expect(await until(() => a.msgs.some((m) => m.t === 'leave'))).toBe(true);
@@ -171,5 +171,26 @@ describe('message sanitising', () => {
   it('strips control characters and markup from text', () => {
     expect(clean(' a<script>\u0007b ', 20)).toBe('ascriptb');
     expect(clean('x'.repeat(50), 10)).toHaveLength(10);
+  });
+});
+
+describe('allowed origins', () => {
+  it('accepts exact origins, wildcard subdomains and "*"', async () => {
+    const wild = createRelayServer({ allowedOrigins: ['https://pilot.github.io', 'https://*.crazygames.com'], dist: '/nonexistent', log: () => {} });
+    const port = await wild.listen(0, '127.0.0.1');
+    const ok = [];
+    for (const origin of ['https://pilot.github.io', 'https://games.crazygames.com', 'https://a.b.crazygames.com']) ok.push(await connect(port, { origin }));
+    await expect(connect(port, { origin: 'https://crazygames.com.evil.example' })).rejects.toThrow('HTTP 403');
+    await expect(connect(port, { origin: 'http://games.crazygames.com' })).rejects.toThrow('HTTP 403');
+    for (const c of ok) c.ws.close();
+    await until(() => wild.wss.clients.size === 0);
+    wild.close();
+
+    const any = createRelayServer({ allowedOrigins: ['*'], dist: '/nonexistent', log: () => {} });
+    const port2 = await any.listen(0, '127.0.0.1');
+    const c = await connect(port2, { origin: 'https://anything.example' });
+    c.ws.close();
+    await until(() => any.wss.clients.size === 0);
+    any.close();
   });
 });

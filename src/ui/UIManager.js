@@ -10,7 +10,6 @@ import { WEATHER_PRESETS } from '../world/Weather.js';
 import { TUTORIALS, QUICKSTART_ID } from '../missions/missions.js';
 import { fmtMoney, fmtDuration, fmtTime } from '../core/format.js';
 import { keyCap } from './dom.js';
-import { platform } from '../platform/platform.js';
 
 const WX_LABELS = { clear: 'Clear', fewClouds: 'Few clouds', scattered: 'Scattered', broken: 'Broken', overcast: 'Overcast', rain: 'Rain', thunderstorm: 'Storm', fog: 'Fog', snow: 'Snow' };
 
@@ -20,7 +19,6 @@ export class UIManager {
     this.root = root;
     this.screen = null;
     this.modal = null;
-    this.chatHistory = [];
     this.screenLayer = el('div.screen-layer');
     this.toasts = el('div#toasts');
     this.loading = el('div#loading', null, el('div.box', null, null));
@@ -70,19 +68,14 @@ export class UIManager {
   bindSystems() {
     const game = this.game;
     this.hud.bindSystems();
-    // Multiplayer chat & status
+    // Multiplayer status and notices (pilots joining / leaving, shoot-downs)
     game.multiplayer.on((ev) => {
-      if (ev.type === 'chat') {
-        // Portal setting: players can turn off chat with strangers
-        if (platform.chatDisabled && !ev.system) return;
-        this.chatHistory.push(ev);
-        if (this.chatHistory.length > 80) this.chatHistory.shift();
-        if (this.menus.mpLog && this.menus.mpLog.isConnected) {
-          this.menus.mpLog.appendChild(this.menus.chatLine(ev));
-          this.menus.mpLog.scrollTop = this.menus.mpLog.scrollHeight;
-        }
-        if (game.state === 'flying') this.hud.addChat(ev);
-      } else if (ev.type === 'status') this.toast(ev.text, 'info');
+      if (ev.type === 'status' || ev.type === 'notice') this.toast(ev.text, 'info', ev.type === 'notice' ? 2500 : 3200);
+      // Keep the pilot list current while the multiplayer screen is open
+      if (ev.type === 'notice' && this.screen === 'multiplayer' && !this.modal) {
+        const a = document.activeElement;
+        if (!(a && a.tagName === 'INPUT')) this.showScreen('multiplayer');
+      }
     });
   }
 
@@ -244,7 +237,7 @@ export class UIManager {
     const m = this.modal;
     this.modal = null;
     if (m.layer.parentNode) m.layer.parentNode.removeChild(m.layer);
-    if (this.game.state === 'flying' && !this.hud.chatOpen) this.game.input.context = 'flight';
+    if (this.game.state === 'flying') this.game.input.context = 'flight';
     if (!silent && m.onClose) m.onClose();
   }
 
@@ -414,10 +407,6 @@ export class UIManager {
     if (this.modalOpen) return;
     this.hud.toggleATC();
   }
-  openChat() {
-    if (this.modalOpen) return;
-    this.hud.openChat();
-  }
   cycleHud() {
     this.hud.cycleHud();
   }
@@ -480,7 +469,6 @@ export class UIManager {
     const p = this.game.player;
     this.map.close();
     this.hud.closeATC();
-    this.hud.closeChat();
     if (p && p.sim.crashed && this.crashShownFor !== p) {
       // Let the crash overlay show first (Game calls showCrash right after)
       this.pendingDebrief = result;
