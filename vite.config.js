@@ -20,16 +20,34 @@ export default defineConfig(({ mode }) => {
       target: 'es2020',
       chunkSizeWarningLimit: 3000,
       outDir: crazy ? 'dist-crazygames' : 'dist',
+      // Portals may serve the files from a CDN origin or a sandboxed frame:
+      // a classic script (no module, no CORS) loads in every case
+      modulePreload: !crazy,
+      rollupOptions: crazy ? { output: { format: 'iife', inlineDynamicImports: true } } : {},
     },
-    worker: { format: 'es' },
+    worker: { format: 'iife' },
     plugins: [
+      {
+        name: 'classic-script',
+        apply: 'build',
+        enforce: 'post',
+        transformIndexHtml: {
+          order: 'post',
+          handler(html) {
+            if (!crazy) return html;
+            return html.replace(/<script type="module" crossorigin src=/g, '<script defer src=').replace(/(<link rel="stylesheet") crossorigin/g, '$1');
+          },
+        },
+      },
       {
         name: 'portal-sdk',
         transformIndexHtml(html) {
           if (!crazy) return html;
           return {
             html,
-            tags: [{ tag: 'script', attrs: { src: CRAZYGAMES_SDK }, injectTo: 'head-prepend' }],
+            // async: a slow or blocked SDK must not hold up the page (the
+            // boot screen); platform.js waits for it with a timeout
+            tags: [{ tag: 'script', attrs: { src: CRAZYGAMES_SDK, async: true, onerror: 'window.__cgSdkFailed=true' }, injectTo: 'head' }],
           };
         },
       },

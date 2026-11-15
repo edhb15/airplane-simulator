@@ -140,6 +140,10 @@ export class Game {
     this.audio = new AudioEngine(this.settings);
     this.ui = new UIManager(this, this.uiRoot);
     this.ui.showLoading('Initialising renderer', 0.05);
+    // The game's own loading screen replaces the boot screen in index.html
+    window.__skywardStarted = true;
+    const boot = document.getElementById('boot');
+    if (boot) boot.remove();
     await nextFrame();
     this.world = new World(this);
     this.weather = new Weather();

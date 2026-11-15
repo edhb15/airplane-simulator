@@ -14,6 +14,17 @@ const AD_INTERVAL_MS = 3 * 60 * 1000;
 function loadScript(src, timeoutMs) {
   return new Promise((resolve, reject) => {
     if (window.CrazyGames && window.CrazyGames.SDK) return resolve();
+    // The CrazyGames build already has the tag in index.html (async): wait for it
+    if (document.querySelector(`script[src="${src}"]`)) {
+      const t0 = performance.now();
+      const poll = () => {
+        if (window.CrazyGames && window.CrazyGames.SDK) return resolve();
+        if (window.__cgSdkFailed) return reject(new Error('SDK failed to load'));
+        if (performance.now() - t0 > timeoutMs) return reject(new Error('SDK load timed out'));
+        setTimeout(poll, 50);
+      };
+      return poll();
+    }
     const s = document.createElement('script');
     s.src = src;
     s.async = true;
@@ -88,10 +99,10 @@ class Platform {
   async init() {
     if (!this.isCrazyGames) return;
     try {
-      await loadScript(SDK_URL, 8000);
+      await loadScript(SDK_URL, 6000);
       const sdk = window.CrazyGames && window.CrazyGames.SDK;
       if (!sdk) throw new Error('SDK missing');
-      await withTimeout(sdk.init(), 8000);
+      await withTimeout(sdk.init(), 6000);
       this.sdk = sdk;
       this.ready = sdk.environment !== 'disabled';
       if (!this.ready) return;

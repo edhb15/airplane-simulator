@@ -7,8 +7,68 @@
     <meta name="description" content="Skyward — a realistic 3D flight simulator in the browser with airliners, fighter jets, private and cargo aircraft." />
     <title>Skyward Flight Simulator</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- Boot screen: shown before any game file has loaded, so the page is never
+         blank, and it reports files or scripts that fail to load -->
+    <style>
+      html, body { margin: 0; height: 100%; background: #050b14; color: #e6eef8; font-family: 'Segoe UI', Arial, sans-serif; overflow: hidden; }
+      #boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; z-index: 200; background: #050b14; text-align: center; padding: 24px; box-sizing: border-box; }
+      #boot .t { font-size: 32px; letter-spacing: 0.3em; font-weight: 700; }
+      #boot .s { font-size: 14px; color: #8ea3bb; letter-spacing: 0.08em; }
+      #boot .bar { width: 220px; height: 3px; background: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden; }
+      #boot .bar i { display: block; width: 40%; height: 100%; background: #f2b33d; animation: bootbar 1.2s ease-in-out infinite; }
+      #boot .err { display: none; max-width: 620px; font-size: 14px; line-height: 1.5; color: #ffd0d0; background: #3a0b0b; border: 1px solid #ff6b6b; border-radius: 8px; padding: 12px 16px; text-align: left; white-space: pre-wrap; word-break: break-word; }
+      @keyframes bootbar { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+    </style>
+    <script>
+      (function () {
+        var errors = [];
+        function show() {
+          var box = document.getElementById('boot-err');
+          if (!box) return;
+          box.style.display = 'block';
+          box.textContent = errors.join('\n\n');
+          var s = document.getElementById('boot-status');
+          if (s) s.textContent = 'The game could not start';
+          var bar = document.querySelector('#boot .bar');
+          if (bar) bar.style.display = 'none';
+        }
+        window.__bootError = function (msg) {
+          if (window.__skywardStarted) return;
+          errors.push(msg);
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', show);
+          else show();
+        };
+        // Script and stylesheet load failures do not bubble: catch them on the way down
+        window.addEventListener(
+          'error',
+          function (e) {
+            var t = e.target;
+            if (t && t !== window && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+              var url = t.src || t.href || '';
+              if (/crazygames-sdk/.test(url)) return; // the game runs without the portal SDK
+              window.__bootError('Could not load ' + url + '\nUpload the contents of the built game (skyward-crazygames.zip or the dist folder), not the source code.');
+            } else if (e.message) window.__bootError(e.message + (e.filename ? '\n' + e.filename + ':' + e.lineno : ''));
+          },
+          true
+        );
+        window.addEventListener('unhandledrejection', function (e) {
+          var r = e.reason;
+          window.__bootError(String((r && (r.stack || r.message)) || r));
+        });
+        // Browsers too old for the game never run the module script at all
+        setTimeout(function () {
+          if (!window.__skywardStarted && !errors.length) window.__bootError('The game did not start after 30 seconds. Try reloading; if it keeps happening, open the browser console (F12) and look for red errors.');
+        }, 30000);
+      })();
+    </script>
   </head>
   <body>
+    <div id="boot">
+      <div class="t">SKYWARD</div>
+      <div class="s" id="boot-status">Loading the flight simulator…</div>
+      <div class="bar"><i></i></div>
+      <div class="err" id="boot-err"></div>
+    </div>
     <canvas id="scene" tabindex="0"></canvas>
     <div id="ui-root"></div>
     <noscript>Skyward requires JavaScript and WebGL.</noscript>

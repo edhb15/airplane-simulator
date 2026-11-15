@@ -4,6 +4,7 @@
 
 import * as THREE from 'three';
 import { detailTexture } from '../render/textures.js';
+import TerrainWorker from './terrainWorker.js?worker&inline';
 
 const ROOT_SIZE = 524288; // 2^19 m
 const N = 32;
@@ -85,7 +86,9 @@ export class Terrain {
     this.nextWorker = 0;
     const count = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 4) - 1));
     for (let i = 0; i < count; i++) {
-      const w = new Worker(new URL('./terrainWorker.js', import.meta.url), { type: 'module' });
+      // Inlined into the bundle and started from a blob, so it also works when
+      // a portal serves the game from another origin or a sandboxed frame
+      const w = new TerrainWorker();
       w.onmessage = (e) => this.onMessage(e.data);
       this.workers.push(w);
     }

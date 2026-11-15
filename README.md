@@ -44,6 +44,8 @@ Upload `skyward-crazygames.zip` (index.html is at the root of the archive, about
 
 To try it locally with the SDK's local test mode (demo ads, logged SDK calls): `npm run dev:crazygames`.
 
+The CrazyGames build loads as one classic script with the CSS and the terrain worker built in, so it also runs when a portal serves it from a CDN or inside a sandboxed frame. If the game can't start (for example, the source code was uploaded instead of the built zip, or a file is missing), the loading screen names the file that failed instead of staying blank.
+
 What the CrazyGames build does (see `src/platform/platform.js`):
 
 | SDK feature | Used for |
