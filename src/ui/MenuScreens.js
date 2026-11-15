@@ -56,6 +56,8 @@ export const ACTION_INFO = {
   dropSupplies: ['Drop supplies (rescue)', 'Engines & systems'],
   smoke: ['Smoke trail (air show)', 'Engines & systems'],
   fireGun: ['Fire cannon (fighters, hold)', 'Weapons'],
+  fireMissile: ['Fire missile (fighters)', 'Weapons'],
+  releaseBomb: ['Drop bomb (fighters)', 'Weapons'],
   autopilot: ['Autopilot engage/disengage', 'Autopilot'],
   autothrottle: ['Autothrottle on/off', 'Autopilot'],
   camera: ['Next camera', 'Camera'],
@@ -538,7 +540,7 @@ export class MenuScreens {
       ['Wingspan', `${a.wing.span.toFixed(1)} m`],
       ['Cockpit', { airliner: 'Glass, fly-by-wire', ga: 'Analog gauges', fighter: 'HUD & MFDs' }[a.cockpit] || a.cockpit],
       ['Autopilot', a.autopilot.autoland ? 'With autoland' : a.autopilot.athr ? 'With autothrottle' : 'Basic'],
-      ...(a.gun ? [['Armament', `${a.gun.name}, ${a.gun.rounds} rds`]] : []),
+      ...(a.gun ? [['Armament', `${a.gun.name}, ${a.gun.rounds} rds${a.stores ? ` · ${a.stores.missiles} missiles · ${a.stores.bombs} bombs` : ''}`]] : []),
     ];
     for (const [k, v] of specs) grid.appendChild(el('div', null, el('span', null, k), el('b', null, v)));
     detail.appendChild(grid);
@@ -1679,6 +1681,7 @@ const HANDBOOK = [
   ['Air traffic control', 'Press <kbd>Tab</kbd> for the radio menu. At the gate request pushback and taxi, follow the green taxi line to the holding point, report ready and wait for takeoff clearance. Inbound, request an approach — ATC gives vectors and landing clearance.'],
   ['Weather & navigation', 'The navigation display shows your route in magenta, other traffic and storm cells from the weather radar. Avoid red cells — they bring heavy turbulence and downdrafts. Crosswind landings need rudder to align with the runway just before touchdown.'],
   ['Fighter guns', 'Hold <kbd>Space</kbd> (gamepad <kbd>A</kbd>, joystick trigger) to fire the cannon once airborne. Put the gunsight pipper on the target — it shows where your rounds will be, gravity drop included, and a range arc when a target is on the gun line. Land and stop to rearm. Spawn target drones from the pause menu in Free Flight, or fly the Gunnery Range mission.'],
+  ['Missiles & bombs', 'Fighters carry missiles and bombs on the wings. <kbd>R</kbd> (gamepad <kbd>B</kbd>) fires a missile: it locks onto an aircraft or drone near the nose (dashed diamond, then <b>LOCK</b> with a fast tone); with no air target it flies to the building or ground under the nose (the small square). <kbd>J</kbd> (gamepad <kbd>X</kbd>) drops a bomb: the circle at the end of the fall line shows where it will land. Cannon fire, missiles and bombs bring buildings down — tall ones snap and topple onto their neighbours. Land and stop to rearm; the city is rebuilt for every flight. Try the Demolition Run mission.'],
   ['Cameras', '<kbd>1</kbd> cockpit · <kbd>2</kbd> cabin · <kbd>3</kbd> external · <kbd>4</kbd> wing · <kbd>5</kbd> cinematic · <kbd>6</kbd> tower · <kbd>7</kbd> fly-by. <kbd>C</kbd> cycles. Right-drag to look around, scroll to zoom. In the cockpit click switches and scroll over knobs.'],
 ];
 

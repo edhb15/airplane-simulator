@@ -431,6 +431,8 @@ export class MissionManager {
         return `Fly through the rings (${this.rings ? this.rings.filter((r) => r.passed).length : 0}/${this.rings ? this.rings.length : 0})`;
       case 'destroy':
         return `Shoot down the target drones (${Math.min(o.count, this.game.combat ? this.game.combat.kills : 0)}/${o.count})`;
+      case 'demolish':
+        return `Destroy buildings (${Math.min(o.count, this.game.combat ? this.game.combat.buildingsDestroyed : 0)}/${o.count})`;
       default:
         return o.type;
     }
@@ -445,6 +447,8 @@ export class MissionManager {
         return !fm.wow && fm.agl > 15;
       case 'destroy':
         return !!this.game.combat && this.game.combat.kills >= o.count;
+      case 'demolish':
+        return !!this.game.combat && this.game.combat.buildingsDestroyed >= o.count;
       case 'land': {
         const td = this.touchdown;
         if (!td || !fm.wow || fm.groundTime < 1.5) return false;

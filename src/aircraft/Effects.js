@@ -39,19 +39,20 @@ const fragment = /* glsl */ `
 `;
 
 export class ParticleSystem {
-  constructor(scene, additive = false) {
-    this.pos = new Float32Array(MAX * 3);
-    this.vel = new Float32Array(MAX * 3);
-    this.age = new Float32Array(MAX);
-    this.life = new Float32Array(MAX);
-    this.size0 = new Float32Array(MAX);
-    this.size1 = new Float32Array(MAX);
-    this.alpha0 = new Float32Array(MAX);
-    this.color = new Float32Array(MAX * 3);
-    this.sizeAttr = new Float32Array(MAX);
-    this.alphaAttr = new Float32Array(MAX);
-    this.drag = new Float32Array(MAX);
-    this.rise = new Float32Array(MAX);
+  constructor(scene, additive = false, max = MAX) {
+    this.max = max;
+    this.pos = new Float32Array(max * 3);
+    this.vel = new Float32Array(max * 3);
+    this.age = new Float32Array(max);
+    this.life = new Float32Array(max);
+    this.size0 = new Float32Array(max);
+    this.size1 = new Float32Array(max);
+    this.alpha0 = new Float32Array(max);
+    this.color = new Float32Array(max * 3);
+    this.sizeAttr = new Float32Array(max);
+    this.alphaAttr = new Float32Array(max);
+    this.drag = new Float32Array(max);
+    this.rise = new Float32Array(max);
     this.count = 0;
     this.next = 0;
     const g = new THREE.BufferGeometry();
@@ -77,8 +78,8 @@ export class ParticleSystem {
 
   emit(p, v, { life = 3, size0 = 2, size1 = 10, alpha = 0.5, color = [1, 1, 1], drag = 0.5, rise = 0 } = {}) {
     const i = this.next;
-    this.next = (this.next + 1) % MAX;
-    this.count = Math.max(this.count, this.next === 0 ? MAX : this.next);
+    this.next = (this.next + 1) % this.max;
+    this.count = Math.max(this.count, this.next === 0 ? this.max : this.next);
     this.pos[i * 3] = p.x;
     this.pos[i * 3 + 1] = p.y;
     this.pos[i * 3 + 2] = p.z;

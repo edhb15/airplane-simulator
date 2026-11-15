@@ -443,6 +443,27 @@ export const MISSIONS = [
     reward: { credits: 8500, xp: 600 },
   },
   {
+    id: 'mil-demolition',
+    category: 'military',
+    title: 'Demolition Run',
+    difficulty: 2,
+    requiredRank: 0,
+    aircraft: ['fx16', 'ef2'],
+    briefing:
+      'The old quarter of Ironwood has been evacuated and is due for demolition — the air force has been asked to do it. Bring down twelve buildings with bombs (J), missiles (R) and the cannon (Space), then land at Ironwood. The circle on the HUD shows where a bomb will land; a missile flies to the square under your nose. Buildings that collapse onto their neighbours count too.',
+    start: { air: { x: 64000, z: 9000, altFt: 4500, heading: 0, kt: 360 } },
+    destination: 'AXIW',
+    route: [{ id: 'TOWN', name: 'Ironwood old quarter', x: 64000, z: -14000 }],
+    approach: '36',
+    time: 15,
+    weather: 'fewClouds',
+    wind: { dir: 350, speed: 4 },
+    payload: {},
+    fuel: 0.6,
+    objectives: [{ type: 'demolish', count: 12 }, { type: 'land', airport: 'AXIW' }, { type: 'stop' }],
+    reward: { credits: 9000, xp: 650 },
+  },
+  {
     id: 'mil-intercept',
     category: 'military',
     title: 'Scramble!',
@@ -664,7 +685,9 @@ export const TUTORIALS = [
         return st.up && st.inverted && Math.abs(snap(g).pitch) < 20 && Math.abs(snap(g).bank) < 30;
       } },
       { text: 'Weapons: hold Space (gamepad A, joystick trigger) to fire the cannon. Watch the tracers, the gunsight pipper and the ammunition counter on the HUD.', keys: 'Space', check: (g) => !!g.player.gun && g.player.gun.fired >= 40 },
-      { text: 'Outstanding flying! Try the Gunnery Range, Canyon Run and Scramble missions next.', wait: 5, final: true },
+      { text: 'Missiles: press R (gamepad B) to fire one. A missile locks onto an aircraft or drone near the nose (diamond, then LOCK). With no air target it flies to the spot under the nose — the small square on the HUD.', keys: 'R', check: (g) => !!g.player.weapons && g.player.weapons.fired.missiles >= 1 },
+      { text: 'Bombs: press J (gamepad X) to drop one. The circle on the HUD at the end of the line from the flight path marker is where it will land — put it on the target, then release.', keys: 'J', check: (g) => !!g.player.weapons && g.player.weapons.fired.bombs >= 1 },
+      { text: 'Outstanding flying! Try the Gunnery Range, Demolition Run, Canyon Run and Scramble missions next — or fly over a city in Free Flight. Land and stop to rearm.', wait: 6, final: true },
     ],
   },
 ];

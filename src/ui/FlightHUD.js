@@ -182,6 +182,11 @@ export class FlightHUD {
     this.targetBoxes = [];
     this.reticle = el('div.gun-reticle.hidden', null, el('i'));
     r.appendChild(this.reticle);
+    // Missile ground aim point and bomb impact point (external views)
+    this.aimGround = el('div.aim-ground.hidden', null, el('span', null, 'MSL'));
+    this.ccipMark = el('div.ccip-mark.hidden', null, el('i'), el('span'));
+    r.appendChild(this.aimGround);
+    r.appendChild(this.ccipMark);
   }
 
   // Screen position of a world point, or null when behind the camera
@@ -219,6 +224,9 @@ export class FlightHUD {
       box.style.transform = `translate(${sp.x - size / 2}px, ${sp.y - size / 2}px)`;
       box.style.width = box.style.height = `${size}px`;
       box.classList.toggle('locked', p.gun && p.gun.lock === t);
+      const w = p.weapons;
+      box.classList.toggle('msl-track', !!w && w.lock === t && !w.locked);
+      box.classList.toggle('msl-lock', !!w && w.lock === t && w.locked);
       box.classList.toggle('player', t.kind === 'player');
       box.classList.remove('hidden');
       box.firstChild.textContent = `${t.callsign || ''} ${units === 'metric' ? (dist / 1000).toFixed(1) + ' km' : (dist / 1852).toFixed(1) + ' NM'}`;
@@ -234,6 +242,20 @@ export class FlightHUD {
       this.reticle.style.transform = `translate(${rp.x}px, ${rp.y}px)`;
       this.reticle.classList.toggle('firing', gun.firing);
       this.reticle.classList.toggle('locked', !!gun.lock);
+    }
+    const w = p && p.weapons;
+    const extW = show && w && w.armed && g.cameras.mode !== 'cockpit';
+    const gp = extW && w.hasGround && !w.lock ? this.project(w.groundPoint, _sp) : null;
+    this.aimGround.classList.toggle('hidden', !gp);
+    if (gp) {
+      this.aimGround.style.transform = `translate(${gp.x}px, ${gp.y}px)`;
+      this.aimGround.classList.toggle('building', !!w.groundBuilding);
+    }
+    const cp = extW && w.hasCcip ? this.project(w.ccip, _sp) : null;
+    this.ccipMark.classList.toggle('hidden', !cp);
+    if (cp) {
+      this.ccipMark.style.transform = `translate(${cp.x}px, ${cp.y}px)`;
+      this.ccipMark.lastChild.textContent = `BOMB ${w.ccipTime.toFixed(1)}s`;
     }
   }
 
@@ -318,6 +340,8 @@ export class FlightHUD {
     this.root.classList.add('hidden');
     for (const b of this.targetBoxes) b.classList.add('hidden');
     this.reticle.classList.add('hidden');
+    this.aimGround.classList.add('hidden');
+    this.ccipMark.classList.add('hidden');
     this.closeATC();
     this.closeChat();
     this.tooltip.classList.add('hidden');
@@ -621,6 +645,12 @@ export class FlightHUD {
     chip('', fmtTime(g.world.time));
     chip('CAM', (CAMERA_LABELS[g.cameras.mode] || '').toUpperCase());
     if (fd.gun) chip('GUN', fd.gun.armed ? `${fd.gun.ammo}` : 'SAFE');
+    if (fd.weapons) {
+      const wx = fd.weapons;
+      if (wx.missilesMax) chip('MSL [R]', `${wx.missiles}${wx.lock === 'lock' ? ' LOCK' : ''}`);
+      if (wx.bombsMax) chip('BOMB [J]', `${wx.bombs}`);
+    }
+    if (g.combat && g.combat.buildingsDestroyed) chip('DESTROYED', `${g.combat.buildingsDestroyed}`);
     if (fd.damage > 0) chip('DMG', `${Math.round(fd.damage)}%`);
     if (g.combat && g.combat.drones.some((d) => d.alive)) chip('TGT', `${g.combat.drones.filter((d) => d.alive).length}`);
     if (g.multiplayer.connected) chip('MP', `${g.multiplayer.players.length + 1}`);

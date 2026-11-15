@@ -559,8 +559,14 @@ export class Multiplayer {
     this.hitTimer = (this.hitTimer || 0) - dt;
     if (this.hitTimer > 0 || !this.pendingHits.size || !this.transport) return;
     this.hitTimer = 0.1;
-    for (const [id, dmg] of this.pendingHits) this.transport.send({ t: 'hit', target: id, dmg: Math.min(50, Math.round(dmg)) });
-    this.pendingHits.clear();
+    // The relay caps one message at 50 damage: bigger hits (missiles, bombs)
+    // go out over the next few flushes
+    for (const [id, dmg] of [...this.pendingHits]) {
+      const send = Math.min(50, Math.round(dmg));
+      if (send > 0) this.transport.send({ t: 'hit', target: id, dmg: send });
+      if (dmg - send >= 1) this.pendingHits.set(id, dmg - send);
+      else this.pendingHits.delete(id);
+    }
   }
 
   reportDown(byId) {

@@ -48,6 +48,9 @@ export const DEFAULT_BINDINGS = {
   lookRight: ['Numpad6'],
   lookCenter: ['Numpad5'],
   fireGun: ['Space'],
+  // R and J are shared: fighters (no reversers, no supply drops) use them for weapons
+  fireMissile: ['KeyR'],
+  releaseBomb: ['KeyJ'],
   map: ['KeyM'],
   hud: ['KeyH'],
   atc: ['Tab'],

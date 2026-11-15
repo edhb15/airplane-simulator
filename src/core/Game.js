@@ -334,6 +334,7 @@ export class Game {
     this.ui.showFlight();
     if (config.tutorial && config.mission) this.ui.tutorialStep(config.mission.steps[0], 0, config.mission.steps.length);
     else if (config.mission) this.ui.toast(`Objective: ${this.missions.currentObjectiveText()}`, 'info', 6000);
+    if (this.player.weapons && !config.tutorial) this.ui.toast('Weapons: Space cannon · R missile · J bomb (in the air)', 'info', 6000);
     this.events.emit('flightStarted', config);
   }
 
@@ -549,7 +550,14 @@ export class Game {
         ui.toast(`Parking brake ${sim.parkingBrake ? 'SET' : 'released'}`, 'info', 1200);
         break;
       case 'reverse':
-        sim.toggleReverse();
+        // Fighters have no reversers: R fires a missile instead (fireMissile)
+        if (!p.weapons) sim.toggleReverse();
+        break;
+      case 'fireMissile':
+        if (p.weapons) p.weapons.fireMissile(this.combat);
+        break;
+      case 'releaseBomb':
+        if (p.weapons) p.weapons.releaseBomb(this.combat);
         break;
       case 'autopilot':
         p.toggleAP();
@@ -616,7 +624,7 @@ export class Game {
         break;
       }
       case 'dropSupplies':
-        this.missions.dropSupplies();
+        if (!p.weapons) this.missions.dropSupplies();
         break;
       case 'smoke':
         p.effects.smokeOn = !p.effects.smokeOn;

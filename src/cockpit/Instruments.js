@@ -1250,6 +1250,52 @@ export function drawFighterHUD(ctx, w, h, d, opts = {}) {
     text(ctx, gun.armed ? (gun.firing ? 'FIRE' : 'ARM') : 'SAFE', cx - 170 * s, h - 102 * s, col, 15 * s, 'center', 'middle', 700);
   }
   if (d.damage > 0) text(ctx, `DMG ${Math.round(d.damage)}%`, cx + 175 * s, h - 82 * s, 'rgba(255,90,60,0.95)', 15 * s, 'center', 'middle', 700);
+  // Missiles and bombs: seeker diamond, ground aim square, bomb impact pipper
+  const wx = d.weapons;
+  if (wx) {
+    ctx.strokeStyle = col;
+    ctx.fillStyle = col;
+    const lim = 11.5;
+    const at = (a) => ({ x: cx + Math.max(-lim, Math.min(lim, a.x)) * ppd, y: cy + Math.max(-lim, Math.min(lim, a.y)) * ppd, clipped: a.behind || Math.abs(a.x) > lim || Math.abs(a.y) > lim });
+    if (wx.armed && (wx.lock === 'track' || wx.lock === 'lock')) {
+      const q = at(wx.lockHud);
+      const r = (wx.lock === 'lock' ? 16 : 22) * s;
+      ctx.lineWidth = (wx.lock === 'lock' ? 3 : 1.5) * s;
+      if (wx.lock !== 'lock') ctx.setLineDash([5 * s, 4 * s]);
+      ctx.beginPath();
+      ctx.moveTo(q.x, q.y - r);
+      ctx.lineTo(q.x + r, q.y);
+      ctx.lineTo(q.x, q.y + r);
+      ctx.lineTo(q.x - r, q.y);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (wx.lock === 'lock') text(ctx, 'LOCK', q.x, q.y - r - 12 * s, col, 14 * s, 'center', 'middle', 700);
+    } else if (wx.armed && wx.lock === 'ground') {
+      const q = at(wx.groundHud);
+      ctx.lineWidth = 2 * s;
+      ctx.strokeRect(q.x - 9 * s, q.y - 9 * s, 18 * s, 18 * s);
+    }
+    if (wx.armed && wx.ccip) {
+      const q = at(wx.ccipHud);
+      // Bomb fall line from the flight path marker to the impact pipper
+      ctx.lineWidth = 1.5 * s;
+      ctx.beginPath();
+      ctx.moveTo(fpmX, fpmY + 12 * s);
+      ctx.lineTo(q.x, q.y - 12 * s);
+      ctx.stroke();
+      ctx.lineWidth = 2 * s;
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, 11 * s, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, 2.2 * s, 0, Math.PI * 2);
+      ctx.fill();
+      if (!q.clipped) text(ctx, `${wx.ccipTime.toFixed(1)}`, q.x + 18 * s, q.y, col, 13 * s, 'left');
+    }
+    if (wx.missilesMax) text(ctx, `MSL ${wx.missiles}`, cx - 170 * s, h - 124 * s, wx.missiles ? col : 'rgba(255,90,60,0.95)', 15 * s, 'center');
+    if (wx.bombsMax) text(ctx, `BMB ${wx.bombs}`, cx - 170 * s, h - 144 * s, wx.bombs ? col : 'rgba(255,90,60,0.95)', 15 * s, 'center');
+  }
   ctx.restore();
 }
 
