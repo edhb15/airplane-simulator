@@ -106,9 +106,11 @@ export function declareWar(s, a, b, opts = {}) {
   touch(s); markDirty(s);
   news(s, `⚔️ ${A.name} declares war on ${s.nations[target].name}! (${war.cb})`, { type: 'war', nations: [a, target] });
 
-  // Call to arms for the defender
+  // Call to arms for the defender (nations bound to both sides stay out without penalty)
+  const attackerAllies = new Set(defenders(s, a));
   for (const ally of defenders(s, target)) {
     if (war.att.includes(ally) || war.def.includes(ally)) continue;
+    if (attackerAllies.has(ally) && !s.nations[ally].overlord) continue;
     if (ally === s.player) {
       s.pending.push({ kind: 'callToArms', war: war.id, side: 'def', ally: target, enemy: a, day: s.day });
       continue;

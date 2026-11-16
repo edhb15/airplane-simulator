@@ -4,7 +4,7 @@ import { GOVS, OFFICIAL_TRAITS, randomLeaderName, personalityOf } from '../data/
 import { TECH_BY_ID } from '../data/techs.js';
 import {
   clamp, rng, owned, news, nameOf, atWar, hasTreaty, addTreaty, removeTreaty, addOpinion, addTrust, remember,
-  aliveIds, markDirty, touch, opinion, warsOf, enemySide, friendSide, sideOf, subjectsOf, hasTech, opinionBreakdown,
+  aliveIds, markDirty, touch, opinion, warsOf, enemySide, friendSide, sideOf, subjectsOf, hasTech, opinionBreakdown, allied,
 } from './state.js';
 import {
   UNITS, BUILDINGS, buildCost, unitBuildCost, manpowerCap, unitField, availableTechs, effectiveTechCost,
@@ -483,7 +483,7 @@ export function answer(s, idx, choice) {
         news(s, `${n.name} cedes ${TERR[p.terr].name} to ${nameOf(s, p.from)}.`, { type: 'bad', player: true });
       } else {
         s.flags[`ultimatum:${p.from}:${s.player}`] = s.day;
-        if (s.nations[p.from]?.alive && !atWar(s, p.from, s.player) && rng(s).chance(0.7)) declareWar(s, p.from, s.player, { cb: 'Rejected ultimatum' });
+        if (s.nations[p.from]?.alive && !atWar(s, p.from, s.player) && !allied(s, p.from, s.player) && rng(s).chance(0.7)) declareWar(s, p.from, s.player, { cb: 'Rejected ultimatum' });
       }
       break;
     case 'retaliate':
