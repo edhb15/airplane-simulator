@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { fileURLToPath } from 'node:url';
 
 // CrazyGames SDK v3. Only the CrazyGames build (vite build --mode crazygames)
 // loads it; src/platform/platform.js falls back to plain web behaviour.
@@ -20,6 +21,13 @@ export default defineConfig(({ mode }) => {
       target: 'es2020',
       chunkSizeWarningLimit: 3000,
       outDir: crazy ? 'dist-crazygames' : 'dist',
+      // WORLD DOMINATION (strategy game) ships as a second page in the web build
+      rollupOptions: crazy ? undefined : {
+        input: {
+          main: fileURLToPath(new URL('./index.html', import.meta.url)),
+          worldDomination: fileURLToPath(new URL('./world-domination/index.html', import.meta.url)),
+        },
+      },
     },
     worker: { format: 'es' },
     plugins: [

@@ -4,6 +4,8 @@ A 3D flight simulator that runs in the browser. Fly airliners, fighter jets, pri
 
 Built with [three.js](https://threejs.org) and [Vite](https://vitejs.dev). The multiplayer relay server is a small Node.js/WebSocket app.
 
+> **Also in this repository: [WORLD DOMINATION](world-domination/README.md)**, a separate grand strategy game. You pick one of 196 nations on a real world map and try to bring every country under your control. Run it with `npm run dev:wd`; the web build serves it at `/world-domination/`.
+
 ## Quick start
 
 Requirements: Node.js 18+ and a desktop browser with WebGL 2 (Chrome, Edge, Firefox or Safari 15+). A dedicated GPU is recommended for the High/Ultra presets.
